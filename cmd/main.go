@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"forge/pkg/database"
 	"forge/pkg/migrations"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,13 @@ import (
 )
 
 func main() {
+	// Initialize the database connection
+	db, err := database.InitDB()
+	if err != nil {
+		fmt.Println("failed to connect database:", err)
+		os.Exit(1)
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   "forge",
 		Short: "Forge CLI - Database Migrations Manager",
@@ -27,7 +35,7 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envFilePath := ".env"
 			dbSettings := []string{
-				"DB_DRIVER=sqllite",
+				"DB_DRIVER=sqlite",
 				"#DB_HOST=localhost",
 				"#DB_PORT=5432",
 				"#DB_USER=user",
@@ -74,7 +82,15 @@ func main() {
 		Use:   "migrate",
 		Short: "Run pending database migrations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrations.RunMigrations()
+			return migrations.RunMigrations(db)
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "migrate:rollback",
+		Short: "Rollback the last database migration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return migrations.RollbackLastMigration(db)
 		},
 	})
 

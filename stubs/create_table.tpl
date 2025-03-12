@@ -1,9 +1,10 @@
 -- UP
-CREATE TABLE {table_name}(
-   id INT,
-   created_at TIMESTAMP,
-   updated_at TIMESTAMP,
-   deleted_at TIMESTAMP
+CREATE TABLE {table_name}
+(
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP
 );
 
 -- DOWN
