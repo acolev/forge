@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"forge/pkg/migrations"
-	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +18,6 @@ func main() {
 		},
 		Version: "1.3.0",
 	}
-
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "make:migration",
 		Short: "Create a new database migration",
