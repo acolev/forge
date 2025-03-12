@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"forge/pkg/migrations"
+	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -18,6 +20,44 @@ func main() {
 		},
 		Version: "1.3.0",
 	}
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "init",
+		Short: "Create or add environment variables to .env file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envFilePath := ".env"
+			dbSettings := []string{
+				"DB_DRIVER=sqllite",
+				"#DB_HOST=localhost",
+				"#DB_PORT=5432",
+				"#DB_USER=user",
+				"#DB_PASSWORD=password",
+				"#DB_NAME=database",
+			}
+
+			file, err := os.OpenFile(envFilePath, os.O_RDWR|os.O_CREATE, 0666)
+			if err != nil {
+				return fmt.Errorf("unable to open or create .env file: %v", err)
+			}
+			defer file.Close()
+
+			content, err := ioutil.ReadAll(file)
+			if err != nil {
+				return fmt.Errorf("unable to read .env file: %v", err)
+			}
+
+			for _, setting := range dbSettings {
+				if !strings.Contains(string(content), setting) {
+					if _, err := file.WriteString(setting + "\n"); err != nil {
+						return fmt.Errorf("unable to write to .env file: %v", err)
+					}
+				}
+			}
+
+			return nil
+		},
+	})
+
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "make:migration",
 		Short: "Create a new database migration",
