@@ -1,3 +1,5 @@
 /database/
 .env
 .idea/
+/forge
+/forge.exe
