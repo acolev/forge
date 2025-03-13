@@ -1,7 +1,10 @@
 package plugins
 
+import (
+	"github.com/spf13/cobra"
+)
+
 type Plugin interface {
 	Name() string
-	Execute() error
-	SetArgs(args []string)
+	RegisterCommands(rootCmd *cobra.Command)
 }
