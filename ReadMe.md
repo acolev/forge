@@ -17,7 +17,6 @@ Forge CLI is a command-line tool designed to manage database migrations. It help
     ```sh
     git clone https://github.com/acolev/forge.git
     cd forge
-    make && sudo mv forge /usr/local/bin
     ```
 
 2. Install dependencies:
