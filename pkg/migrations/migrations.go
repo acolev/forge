@@ -141,7 +141,10 @@ func createMigrationFile(path string, tableName string) error {
 	stubName := strings.Join(strings.Split(tableName, "_")[:len(strings.Split(tableName, "_"))-1], "_")
 	tpl, err := getTemplate(stubName)
 	if err != nil {
-		tpl = ""
+		tpl = "" +
+			"-- UP\n" +
+			"\n" +
+			"-- DOWN\n"
 	} else {
 		// Remove the prefix from the table name
 		prefix := stubName + "_"

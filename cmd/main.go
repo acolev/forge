@@ -19,7 +19,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Specify a command. Use 'forge --help' for more information.")
 		},
-		Version: "2.0.0",
+		Version: "2.0.2",
 	}
 
 	rootCmd.AddCommand(&cobra.Command{
