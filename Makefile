@@ -45,3 +45,5 @@ endif
 
 # Phony targets
 .PHONY: all build plugins clean
+
+#sudo mv forge /usr/local/bin/

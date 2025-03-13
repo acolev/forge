@@ -31,7 +31,7 @@ func LoadPlugins(rootCmd *cobra.Command) {
 
 	files, err := ioutil.ReadDir(pluginDir)
 	if err != nil {
-		fmt.Printf("unable to read plugin directory: %v\n", err)
+		//fmt.Printf("unable to read plugin directory: %v\n", err)
 		return
 	}
 
@@ -57,7 +57,7 @@ func LoadPlugins(rootCmd *cobra.Command) {
 			}
 
 			pluginInstance.RegisterCommands(rootCmd)
-			fmt.Printf("Loaded plugin: %s\n", pluginInstance.Name())
+			//fmt.Printf("Loaded plugin: %s\n", pluginInstance.Name())
 		}
 	}
 }

@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"forge/pkg/database"
 	"forge/pkg/migrations"
 	"forge/pkg/plugins"
 	"io/ioutil"
@@ -21,7 +19,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Specify a command. Use 'forge --help' for more information.")
 		},
-		Version: "1.3.0",
+		Version: "2.0.0",
 	}
 
 	rootCmd.AddCommand(&cobra.Command{
@@ -63,36 +61,6 @@ func main() {
 	})
 
 	rootCmd.AddCommand(&cobra.Command{
-		Use:   "make:migration",
-		Short: "Create a new database migration",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 {
-				return errors.New("you must specify a table name")
-			}
-			tableName := args[0]
-			return migrations.CreateMigration(tableName)
-		},
-	})
-
-	rootCmd.AddCommand(&cobra.Command{
-		Use:   "migrate",
-		Short: "Run pending database migrations",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, _ := database.InitDB()
-			return migrations.RunMigrations(db)
-		},
-	})
-
-	rootCmd.AddCommand(&cobra.Command{
-		Use:   "migrate:rollback",
-		Short: "Rollback the last database migration",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, _ := database.InitDB()
-			return migrations.RollbackLastMigration(db)
-		},
-	})
-
-	rootCmd.AddCommand(&cobra.Command{
 		Use:   "env",
 		Short: "Display the current framework environment",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -104,6 +72,8 @@ func main() {
 			return nil
 		},
 	})
+
+	migrations.RegisterCommands(rootCmd)
 
 	// Load plugins and register their commands
 	plugins.LoadPlugins(rootCmd)
