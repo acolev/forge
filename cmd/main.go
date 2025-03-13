@@ -13,12 +13,6 @@ import (
 )
 
 func main() {
-	// Initialize the database connection
-	db, err := database.InitDB()
-	if err != nil {
-		fmt.Println("failed to connect database:", err)
-		os.Exit(1)
-	}
 
 	rootCmd := &cobra.Command{
 		Use:   "forge",
@@ -82,6 +76,7 @@ func main() {
 		Use:   "migrate",
 		Short: "Run pending database migrations",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			db, _ := database.InitDB()
 			return migrations.RunMigrations(db)
 		},
 	})
@@ -90,6 +85,7 @@ func main() {
 		Use:   "migrate:rollback",
 		Short: "Rollback the last database migration",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			db, _ := database.InitDB()
 			return migrations.RollbackLastMigration(db)
 		},
 	})

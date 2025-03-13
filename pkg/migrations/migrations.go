@@ -94,6 +94,7 @@ func RunMigrations(db *gorm.DB) error {
 
 	return nil
 }
+
 func RollbackLastMigration(db *gorm.DB) error {
 	var lastIteration int
 	if err := db.Model(&Migration{}).Select("MAX(iteration)").Scan(&lastIteration).Error; err != nil {
