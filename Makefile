@@ -2,7 +2,7 @@
 
 # Variables
 BINARY_NAME=forge
-PLUGIN_DIR=database/plugins
+PLUGIN_DIR=plugins/*
 PLUGIN_FILES=$(wildcard $(PLUGIN_DIR)/*.go)
 PLUGIN_OUTPUT=$(PLUGIN_FILES:.go=.so)
 

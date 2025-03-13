@@ -3,3 +3,5 @@
 .idea/
 /forge
 /forge.exe
+*.so
+*.dll
