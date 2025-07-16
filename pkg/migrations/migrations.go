@@ -14,9 +14,9 @@ import (
 const migrationPath = "./database/migrations"
 
 type Migration struct {
-	ID        uint   `gorm:"primaryKey"`
-	FileName  string `gorm:"unique"`
-	Iteration int
+	ID       uint   `gorm:"primaryKey"`
+	FileName string `gorm:"unique"`
+	Batch    int
 }
 
 func CreateMigration(tableName string) error {
@@ -40,12 +40,11 @@ func RunMigrations(db *gorm.DB) error {
 		return fmt.Errorf("unable to read migration directory: %v", err)
 	}
 
-	var lastIteration int
+	var lastBatch int = 0
 	var migrationsToRun []os.FileInfo
 
-	if err := db.Model(&Migration{}).Select("MAX(iteration)").Scan(&lastIteration).Error; err != nil {
-		fmt.Printf("Failed to get last iteration: %v\n", err)
-		lastIteration = 0
+	if err := db.Model(&Migration{}).Select("COALESCE(MAX(batch), 0)").Scan(&lastBatch).Error; err != nil {
+		return fmt.Errorf("failed to get last batch: %v", err)
 	}
 
 	for _, file := range files {
@@ -83,8 +82,8 @@ func RunMigrations(db *gorm.DB) error {
 			}
 
 			migration := Migration{
-				FileName:  file.Name(),
-				Iteration: lastIteration + 1,
+				FileName: file.Name(),
+				Batch:    lastBatch + 1,
 			}
 			if err := db.Create(&migration).Error; err != nil {
 				return fmt.Errorf("failed to record migration: %s, error: %v", file.Name(), err)
@@ -96,13 +95,13 @@ func RunMigrations(db *gorm.DB) error {
 }
 
 func RollbackLastMigration(db *gorm.DB) error {
-	var lastIteration int
-	if err := db.Model(&Migration{}).Select("MAX(iteration)").Scan(&lastIteration).Error; err != nil {
-		return fmt.Errorf("failed to get last iteration: %v", err)
+	var lastBatch int
+	if err := db.Model(&Migration{}).Select("MAX(batch)").Scan(&lastBatch).Error; err != nil {
+		return fmt.Errorf("failed to get last batch: %v", err)
 	}
 
 	var migrations []Migration
-	if err := db.Where("iteration = ?", lastIteration).Find(&migrations).Error; err != nil {
+	if err := db.Where("batch = ?", lastBatch).Find(&migrations).Error; err != nil {
 		return fmt.Errorf("failed to find migration records: %v", err)
 	}
 

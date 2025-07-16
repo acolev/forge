@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"errors"
+	"fmt"
 	"forge/pkg/database"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,10 @@ func RegisterCommands(rootCmd *cobra.Command) {
 		Use:   "migrate",
 		Short: "Run pending database migrations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			db, _ := database.InitDB()
+			db, err := database.InitDB()
+			if err != nil {
+				return fmt.Errorf("failed to initialize database: %v", err)
+			}
 			return RunMigrations(db)
 		},
 	})

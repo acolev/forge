@@ -14,9 +14,9 @@ import (
 var DB *gorm.DB
 
 type Migration struct {
-	ID        uint   `gorm:"primaryKey"`
-	FileName  string `gorm:"unique"`
-	Iteration int
+	ID       uint   `json:"id" gorm:"primaryKey"`
+	FileName string `json:"fileName" gorm:"unique"`
+	Batch    int    `json:"batch"`
 }
 
 func InitDB() (*gorm.DB, error) {
@@ -45,7 +45,7 @@ func InitDB() (*gorm.DB, error) {
 	case "sqlite":
 		DB, err = gorm.Open(sqlite.Open(source), gormConfig)
 	case "mysql":
-		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPassword, dbName)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", dbUser, dbPassword, dbHost, dbPort, dbName)
 		DB, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	case "postgres":
 		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPassword, dbName)
@@ -59,6 +59,10 @@ func InitDB() (*gorm.DB, error) {
 	}
 
 	// AutoMigrate the Migration struct to create the migrations table if it doesn't exist
+	//upSection := "CREATE TABLE migrations (\n    id INTEGER PRIMARY KEY AUTO_INCREMENT,\n    file_name TEXT,\n    iteration INTEGER,\n    UNIQUE KEY uni_migrations_file_name (file_name(255))\n);"
+	//if err := DB.Exec(upSection).Error; err != nil {
+	//	return nil, fmt.Errorf("failed to create migrations table: %v", err)
+	//}
 	if err := DB.AutoMigrate(&Migration{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %v", err)
 	}
