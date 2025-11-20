@@ -40,6 +40,10 @@ func RunMigrations(db *gorm.DB) error {
 		return fmt.Errorf("unable to read migration directory: %v", err)
 	}
 
+	if err := fireBeforeMigrate(db); err != nil {
+		return fmt.Errorf("before migrate hook failed: %w", err)
+	}
+
 	var lastBatch int = 0
 	var migrationsToRun []os.FileInfo
 
@@ -91,6 +95,10 @@ func RunMigrations(db *gorm.DB) error {
 		}
 	}
 
+	if err := fireAfterMigrate(db); err != nil {
+		return fmt.Errorf("after migrate hook failed: %w", err)
+	}
+
 	return nil
 }
 
@@ -98,6 +106,10 @@ func RollbackLastMigration(db *gorm.DB) error {
 	var lastBatch int
 	if err := db.Model(&Migration{}).Select("MAX(batch)").Scan(&lastBatch).Error; err != nil {
 		return fmt.Errorf("failed to get last batch: %v", err)
+	}
+
+	if err := fireBeforeRollback(db); err != nil {
+		return fmt.Errorf("before rollback hook failed: %w", err)
 	}
 
 	var migrations []Migration
@@ -125,6 +137,10 @@ func RollbackLastMigration(db *gorm.DB) error {
 		if err := db.Delete(&migration).Error; err != nil {
 			return fmt.Errorf("failed to delete migration record: %s, error: %v", migration.FileName, err)
 		}
+	}
+
+	if err := fireAfterRollback(db); err != nil {
+		return fmt.Errorf("after rollback hook failed: %w", err)
 	}
 
 	return nil
