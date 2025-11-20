@@ -1,18 +1,36 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-VERSION=${1:-0.1.0}
+# Directory where plugin source packages live
+PLUGINS_SRC_DIR="plugins"
 
-mkdir -p dist
+# Output root for built plugins
+OUT_ROOT="forge-project/.forge/plugins/acolev"
 
-# Linux amd64
-#GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
-#go build -buildmode=plugin -o forge-project/.forge/plugins/acolev/example-linux-amd64 ./plugins/example/example.go
+# Detect current platform
+HOST_GOOS="$(go env GOOS)"
+HOST_GOARCH="$(go env GOARCH)"
 
-# macOS Intel
-GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 \
-  go build -buildmode=plugin -o  forge-project/.forge/plugins/acolev/example_darwin_amd64.so ./plugins/example/example.go
+echo "==> Building plugins for current platform: ${HOST_GOOS}/${HOST_GOARCH}"
+echo "    Source: ${PLUGINS_SRC_DIR}"
+echo "    Output: ${OUT_ROOT}"
 
-# macOS ARM (M1/M2/M3)
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
-  go build -buildmode=plugin -o  forge-project/.forge/plugins/acolev/example_darwin_arm64.so ./plugins/example/example.go
+mkdir -p "${OUT_ROOT}"
+
+# Iterate over plugin packages inside ./plugins/*
+for plugin_path in "${PLUGINS_SRC_DIR}"/*; do
+  if [ ! -d "${plugin_path}" ]; then
+    # Skip non-directories
+    continue
+  fi
+
+  plugin_name="$(basename "${plugin_path}")"
+  out_file="${OUT_ROOT}/${plugin_name}_${HOST_GOOS}_${HOST_GOARCH}.so"
+
+  echo "  -> ${plugin_name} -> ${out_file}"
+
+  GOOS="${HOST_GOOS}" GOARCH="${HOST_GOARCH}" CGO_ENABLED=1 \
+    go build -buildmode=plugin -o "${out_file}" "./${plugin_path}"
+done
+
+echo "==> Done"
