@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release-linux:
+  build-and-release:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,32 +21,13 @@ jobs:
         with:
           go-version: "1.23.1"
 
-      - name: Build linux binary (with CGO)
+      - name: Build binaries for all targets
         run: |
           mkdir -p dist
 
           echo "Building forge-linux-amd64..."
           GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
             go build -o dist/forge-linux-amd64 ./cmd/main.go
-
-      - name: Show built files (linux)
-        run: ls -l dist
-
-  build-and-release-macos:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.1"
-
-      - name: Build darwin binaries (with CGO)
-        run: |
-          mkdir -p dist
 
           echo "Building forge-darwin-amd64..."
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 \
@@ -56,16 +37,8 @@ jobs:
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
             go build -o dist/forge-darwin-arm64 ./cmd/main.go
 
-      - name: Show built files (macos)
+      - name: Show built files
         run: ls -l dist
-
-  publish-release:
-    needs: [build-and-release-linux, build-and-release-macos]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
