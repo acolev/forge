@@ -32,7 +32,6 @@ type githubAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// RunSelfUpdate checks GitHub releases and replaces the current binary.
 func RunSelfUpdate(currentVersion string) error {
 	fmt.Println("Checking for updates...")
 
