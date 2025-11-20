@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Version = "1.2.5"
+const Version = "1.2.5b"
 
 func main() {
 
