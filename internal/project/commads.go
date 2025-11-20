@@ -13,11 +13,12 @@ func RegisterCommands(rootCmd *cobra.Command) {
 	}
 
 	var (
-		fromURL string
-		name    string
-		dir     string
-		gitInit bool
-		lang    string
+		fromURL  string
+		name     string
+		dir      string
+		gitInit  bool
+		lang     string
+		provider string
 	)
 
 	newCmd := &cobra.Command{
@@ -33,11 +34,18 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			from := strings.TrimSpace(fromURL)
 			l := strings.TrimSpace(lang)
+			prov := TemplateProvider(strings.TrimSpace(provider))
 
+			// 1) template / URL mode
 			if from != "" {
+				resolved, err := ResolveTemplateURL(from, prov)
+				if err != nil {
+					return err
+				}
+
 				projName := strings.TrimSpace(name)
 				if projName == "" {
-					projName = deriveProjectName(from)
+					projName = deriveProjectName(resolved)
 					if projName == "" {
 						projName = "forge-project"
 					}
@@ -48,10 +56,10 @@ Examples:
 					targetDir = "./" + projName
 				}
 
-				return CreateProjectFromGit(from, projName, targetDir, gitInit)
+				return CreateProjectFromGit(resolved, projName, targetDir, gitInit)
 			}
 
-			// 2) Явно указан --lang → scaffold по языку, без wizard’а
+			// 2) lang mode
 			if l != "" {
 				projName := strings.TrimSpace(name)
 				if projName == "" {
@@ -64,12 +72,13 @@ Examples:
 				return InitProject(l, projName, targetDir, gitInit)
 			}
 
-			// 3) Ничего не указано → запускаем wizard
+			// 3) wizard mode
 			return runProjectNewWizard(name, dir, gitInit)
 		},
 	}
 
-	newCmd.Flags().StringVar(&fromURL, "from", "", "Git repository URL to use as template")
+	newCmd.Flags().StringVar(&fromURL, "from", "", "Git template (URL or owner/repo)")
+	newCmd.Flags().StringVar(&provider, "provider", "github", "Template provider: github|gitlab|bitbucket")
 	newCmd.Flags().StringVar(&lang, "lang", "", "Project language: go, node, ts, vue, empty")
 	newCmd.Flags().StringVar(&name, "name", "", "Project name")
 	newCmd.Flags().StringVar(&dir, "dir", "", "Target directory (default: ./<name>)")

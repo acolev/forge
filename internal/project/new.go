@@ -12,17 +12,14 @@ import (
 func CreateProjectFromGit(repoURL, name, targetDir string, gitInit bool) error {
 	fmt.Printf("Creating project %q from %s\n", name, repoURL)
 
-	// Проверяем git
 	if _, err := exec.LookPath("git"); err != nil {
 		return fmt.Errorf("git is not installed or not in PATH: %w", err)
 	}
 
-	// Проверяем директорию (для "." разрешаем существующую)
 	if err := ensureTargetDirAvailable(targetDir); err != nil {
 		return err
 	}
 
-	// Временная папка
 	tmpDir, err := os.MkdirTemp("", "forge-template-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
@@ -31,32 +28,27 @@ func CreateProjectFromGit(repoURL, name, targetDir string, gitInit bool) error {
 
 	cloneDir := filepath.Join(tmpDir, "repo")
 
-	// Клонируем
 	fmt.Printf("Cloning template into %s...\n", cloneDir)
 	if err := runCmd(tmpDir, "git", "clone", "--depth", "1", repoURL, cloneDir); err != nil {
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
-	// Удаляем .git
 	if err := os.RemoveAll(filepath.Join(cloneDir, ".git")); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove .git from template: %w", err)
 	}
 
-	// Создаём target (если не ".")
 	if targetDir != "." {
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create target dir %s: %w", targetDir, err)
 		}
 	}
 
-	// Копируем файлы
 	if err := copyDir(cloneDir, targetDir); err != nil {
 		return fmt.Errorf("failed to copy template files: %w", err)
 	}
 
 	fmt.Printf("Project created at %s\n", targetDir)
 
-	// git init, если нужно
 	if gitInit {
 		if err := initGitRepo(targetDir); err != nil {
 			return fmt.Errorf("project created, but git init failed: %w", err)

@@ -14,19 +14,31 @@ func runProjectNewWizard(nameFlag, dirFlag string, gitInit bool) error {
 		return err
 	}
 
-	var fromURL string
-	var lang string
+	var (
+		fromRef string
+		fromURL string
+		lang    string
+	)
 
 	switch mode {
 	case "git":
-		fromURL, err = askGitURL()
+		// Ask for template reference: can be a full URL or owner/repo.
+		fromRef, err = askGitRef()
 		if err != nil {
 			return err
 		}
+
+		// Resolve "owner/repo" into a full URL using GitHub as default provider.
+		fromURL, err = ResolveTemplateURL(fromRef, ProviderGitHub)
+		if err != nil {
+			return err
+		}
+
 	case "go", "node", "ts", "empty":
 		lang = mode
+
 	default:
-		return fmt.Errorf("unknown mode: %s", mode)
+		return fmt.Errorf("unknown project mode: %s", mode)
 	}
 
 	suggestedName := ""
@@ -58,7 +70,7 @@ func selectNewProjectMode() (string, error) {
 			"Node.js project",
 			"TypeScript project",
 			"Empty project",
-			"From Git repository URL",
+			"From Git repository or template",
 		},
 		Default: "Go project",
 	}
@@ -77,29 +89,28 @@ func selectNewProjectMode() (string, error) {
 		return "ts", nil
 	case "Empty project":
 		return "empty", nil
-	case "From Git repository URL":
+	case "From Git repository or template":
 		return "git", nil
 	default:
 		return "", fmt.Errorf("unexpected choice: %s", answer)
 	}
 }
 
-func askGitURL() (string, error) {
+func askGitRef() (string, error) {
 	prompt := &survey.Input{
-		Message: "Enter Git repository URL:",
-		Help:    "Example: https://github.com/user/template.git",
+		Message: "Enter Git repository (URL or owner/repo):",
+		Help:    "Examples: https://github.com/acolev/forge.git or acolev/forge",
 	}
 
-	var url string
-	if err := survey.AskOne(prompt, &url, survey.WithValidator(survey.Required)); err != nil {
+	var ref string
+	if err := survey.AskOne(prompt, &ref, survey.WithValidator(survey.Required)); err != nil {
 		return "", err
 	}
 
-	return strings.TrimSpace(url), nil
+	return strings.TrimSpace(ref), nil
 }
 
 func askProjectNameAndDir(nameFlag, dirFlag, suggestedName string) (string, string, error) {
-	// --- 1) Имя проекта ---
 	defaultName := strings.TrimSpace(nameFlag)
 	if defaultName == "" {
 		if suggestedName != "" {
@@ -120,7 +131,6 @@ func askProjectNameAndDir(nameFlag, dirFlag, suggestedName string) (string, stri
 	}
 	projectName = strings.TrimSpace(projectName)
 
-	// --- 2) Папка проекта ---
 	defaultDir := strings.TrimSpace(dirFlag)
 	if defaultDir == "" {
 		defaultDir = "./" + projectName

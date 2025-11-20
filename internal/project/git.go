@@ -18,12 +18,10 @@ func GitAddProcess(dir, remote string) error {
 
 	fmt.Println("Using directory:", absDir)
 
-	// 1) Проверяем git
 	if _, err := exec.LookPath("git"); err != nil {
 		return fmt.Errorf("git is not installed or not found in PATH")
 	}
 
-	// 2) Есть ли .git?
 	hasGit := dirExists(filepath.Join(absDir, ".git"))
 
 	if !hasGit {
@@ -34,13 +32,11 @@ func GitAddProcess(dir, remote string) error {
 		}
 	}
 
-	// 3) Добавляем файлы
 	fmt.Println("Adding all files...")
 	if err := runGit(absDir, "add", "."); err != nil {
 		return err
 	}
 
-	// 4) Первый коммит (если нет ни одного)
 	if !hasGit || !gitHasCommits(absDir) {
 		fmt.Println("Creating initial commit...")
 		if err := runGit(absDir, "commit", "-m", "Initial commit (forge)"); err != nil {
@@ -48,7 +44,6 @@ func GitAddProcess(dir, remote string) error {
 		}
 	}
 
-	// 5) Remote URL
 	if remote == "" {
 		remote, err = askRemoteURL()
 		if err != nil {
@@ -56,7 +51,6 @@ func GitAddProcess(dir, remote string) error {
 		}
 	}
 
-	// Проверяем, что remote origin ещё не существует
 	if gitHasOrigin(absDir) {
 		return errors.New("origin remote already exists")
 	}
@@ -66,7 +60,6 @@ func GitAddProcess(dir, remote string) error {
 		return err
 	}
 
-	// 6) Спросим — пушить?
 	shouldPush, err := askYesNo("Push initial commit to remote?")
 	if err != nil {
 		return err
