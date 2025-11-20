@@ -2,14 +2,19 @@ package main
 
 import (
 	"fmt"
-	"forge/pkg/migrations"
-	"forge/pkg/plugins"
+	"forge/internal/migrations"
+	"forge/internal/plugins"
+	"forge/internal/project"
+	"forge/internal/seeders"
+	"forge/internal/selfupdate"
 	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+const Version = "3.0.0"
 
 func main() {
 
@@ -19,7 +24,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Specify a command. Use 'forge --help' for more information.")
 		},
-		Version: "2.0.2",
+		Version: Version,
 	}
 
 	rootCmd.AddCommand(&cobra.Command{
@@ -73,7 +78,10 @@ func main() {
 		},
 	})
 
+	selfupdate.Register(rootCmd, Version)
 	migrations.RegisterCommands(rootCmd)
+	seeders.RegisterCommands(rootCmd)
+	project.RegisterCommands(rootCmd)
 
 	// Load plugins and register their commands
 	plugins.LoadPlugins(rootCmd)
