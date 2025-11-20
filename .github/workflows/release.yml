@@ -33,7 +33,7 @@ jobs:
       - name: Upload linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-linux
           path: dist
 
   build-darwin:
@@ -66,7 +66,7 @@ jobs:
       - name: Upload darwin artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-darwin
           path: dist
 
   release:
@@ -78,11 +78,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download built artifacts
+      - name: Download built artifacts (linux)
         uses: actions/download-artifact@v4
         with:
-          name: dist
-          path: dist
+          name: dist-linux
+          path: dist/linux
+
+      - name: Download built artifacts (darwin)
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-darwin
+          path: dist/darwin
 
       - name: Show built files
         run: ls -l dist || true
@@ -90,6 +96,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
