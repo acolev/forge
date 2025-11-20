@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"forge/internal/hooks"
 	"github.com/spf13/cobra"
 )
 
@@ -22,5 +24,15 @@ func (p *ExamplePlugin) RegisterCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(exampleCmd)
 }
 
-// Exported variable Plugin must be of type ExamplePlugin
-var Plugin ExamplePlugin
+// Handle implements hooks.Handler — плагин слушает события.
+func (p *ExamplePlugin) Handle(ctx context.Context, e hooks.Event) error {
+	fmt.Println("test: ", e.Name)
+	if e.Name == "db.migrate.before" {
+		fmt.Println("ExamplePlugin: db.migrate.before event received")
+		fmt.Println(e.Payload)
+	}
+	return nil
+}
+
+// Exported variable Plugin must be a pointer so it implements the interfaces
+var Plugin = ExamplePlugin{}

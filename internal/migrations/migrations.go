@@ -1,7 +1,9 @@
 package migrations
 
 import (
+	"context"
 	"fmt"
+	"forge/internal/hooks"
 	"gorm.io/gorm"
 	"io/ioutil"
 	"os"
@@ -35,13 +37,11 @@ func CreateMigration(tableName string) error {
 }
 
 func RunMigrations(db *gorm.DB) error {
+	ctx := context.Background()
+
 	files, err := ioutil.ReadDir(migrationPath)
 	if err != nil {
 		return fmt.Errorf("unable to read migration directory: %v", err)
-	}
-
-	if err := fireBeforeMigrate(db); err != nil {
-		return fmt.Errorf("before migrate hook failed: %w", err)
 	}
 
 	var lastBatch int = 0
@@ -49,6 +49,17 @@ func RunMigrations(db *gorm.DB) error {
 
 	if err := db.Model(&Migration{}).Select("COALESCE(MAX(batch), 0)").Scan(&lastBatch).Error; err != nil {
 		return fmt.Errorf("failed to get last batch: %v", err)
+	}
+
+	// Emit before-create event
+	if err := hooks.Emit(ctx, hooks.Event{Name: "db.migrate.before", Payload: map[string]any{
+		"lastBatch":       lastBatch,
+		"db":              db,
+		"migrationPath":   migrationPath,
+		"files":           files,
+		"migrationsToRun": migrationsToRun,
+	}}); err != nil {
+		return err
 	}
 
 	for _, file := range files {
@@ -95,8 +106,19 @@ func RunMigrations(db *gorm.DB) error {
 		}
 	}
 
-	if err := fireAfterMigrate(db); err != nil {
-		return fmt.Errorf("after migrate hook failed: %w", err)
+	// Emit before-create event
+	if err := hooks.Emit(ctx, hooks.Event{Name: "db.migrate.after", Payload: map[string]any{
+		"lastBatch":      lastBatch,
+		"db":             db,
+		"migrationPath":  migrationPath,
+		"files":          files,
+		"migrationsRun":  migrationsToRun,
+		"newBatchNumber": lastBatch + 1,
+		"appliedAt":      time.Now(),
+		"duration":       time.Since(time.Now()),
+		"error":          nil,
+	}}); err != nil {
+		return err
 	}
 
 	return nil
@@ -108,9 +130,9 @@ func RollbackLastMigration(db *gorm.DB) error {
 		return fmt.Errorf("failed to get last batch: %v", err)
 	}
 
-	if err := fireBeforeRollback(db); err != nil {
-		return fmt.Errorf("before rollback hook failed: %w", err)
-	}
+	//if err := fireBeforeRollback(db); err != nil {
+	//	return fmt.Errorf("before rollback hook failed: %w", err)
+	//}
 
 	var migrations []Migration
 	if err := db.Where("batch = ?", lastBatch).Find(&migrations).Error; err != nil {
@@ -139,9 +161,9 @@ func RollbackLastMigration(db *gorm.DB) error {
 		}
 	}
 
-	if err := fireAfterRollback(db); err != nil {
-		return fmt.Errorf("after rollback hook failed: %w", err)
-	}
+	//if err := fireAfterRollback(db); err != nil {
+	//	return fmt.Errorf("after rollback hook failed: %w", err)
+	//}
 
 	return nil
 }

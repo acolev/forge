@@ -1,15 +1,25 @@
 package project
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"forge/internal/hooks"
 )
 
 func CreateProjectFromGit(repoURL, name, targetDir string, gitInit bool) error {
+	ctx := context.Background()
+
+	// Emit before-create event
+	if err := hooks.Emit(ctx, hooks.Event{Name: "project.create.before", Payload: map[string]any{"repo": repoURL, "name": name, "target": targetDir, "gitInit": gitInit}}); err != nil {
+		return err
+	}
+
 	fmt.Printf("Creating project %q from %s\n", name, repoURL)
 
 	if _, err := exec.LookPath("git"); err != nil {
@@ -48,6 +58,11 @@ func CreateProjectFromGit(repoURL, name, targetDir string, gitInit bool) error {
 	}
 
 	fmt.Printf("Project created at %s\n", targetDir)
+
+	// Emit after-create event
+	if err := hooks.Emit(ctx, hooks.Event{Name: "project.create.after", Payload: map[string]any{"repo": repoURL, "name": name, "target": targetDir, "gitInit": gitInit}}); err != nil {
+		return err
+	}
 
 	if gitInit {
 		if err := initGitRepo(targetDir); err != nil {

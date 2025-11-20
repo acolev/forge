@@ -5,7 +5,7 @@ set -euo pipefail
 PLUGINS_SRC_DIR="plugins"
 
 # Output root for built plugins
-OUT_ROOT=".forge/acolev"
+OUT_ROOT="forge-project/.forge/plugins/acolev"
 
 # Detect current platform
 HOST_GOOS="$(go env GOOS)"

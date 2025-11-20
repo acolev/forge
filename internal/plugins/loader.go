@@ -2,10 +2,11 @@ package plugins
 
 import (
 	"fmt"
-	"forge/internal/migrations"
+	"forge/internal/hooks"
 	"os"
 	"path/filepath"
 	"plugin"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -33,18 +34,12 @@ func LoadPlugins(rootCmd *cobra.Command) {
 func discoverPluginRoots() []string {
 	var dirs []string
 
-	// 1) Explicit override via environment variable.
 	if envDir := os.Getenv("FORGE_PLUGINS_DIR"); envDir != "" {
 		dirs = append(dirs, envDir)
 	}
 
-	// 2) Project-local directory: .forge/plugins
 	dirs = append(dirs, filepath.Join(".forge", "plugins"))
 
-	// 3) Legacy directory: database/plugins
-	dirs = append(dirs, filepath.Join("database", "plugins"))
-
-	// 4) Global directory: $HOME/.forge/plugins
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		dirs = append(dirs, filepath.Join(home, ".forge", "plugins"))
 	}
@@ -123,14 +118,41 @@ func loadSinglePlugin(rootCmd *cobra.Command, path string) {
 		return
 	}
 
-	pluginInstance, ok := sym.(Plugin)
-	if !ok {
+	var pluginInstance Plugin
+
+	// Try several possible shapes of the exported symbol:
+	// 1) the symbol itself implements the Plugin interface
+	// 2) the symbol is a pointer to an interface variable (*Plugin)
+	// 3) the symbol is a pointer to the variable holding the concrete plugin
+	if pi, ok := sym.(Plugin); ok {
+		pluginInstance = pi
+	} else if pptr, ok := sym.(*Plugin); ok && pptr != nil {
+		// symbol is pointer to an interface variable
+		pluginInstance = *pptr
+	} else {
+		// Use reflection to handle cases like: var Plugin = &ExamplePlugin{}
+		v := reflect.ValueOf(sym)
+		if v.Kind() == reflect.Ptr && v.Elem().IsValid() {
+			val := v.Elem()
+			// If the element implements Plugin, use it
+			pluginIFace := reflect.TypeOf((*Plugin)(nil)).Elem()
+			if val.Type().Implements(pluginIFace) {
+				pluginInstance = val.Interface().(Plugin)
+			} else if val.Kind() == reflect.Ptr && val.Elem().Type().Implements(pluginIFace) {
+				// double pointer cases
+				pluginInstance = val.Elem().Interface().(Plugin)
+			}
+		}
+	}
+
+	if pluginInstance == nil {
 		fmt.Printf("invalid Plugin type in %s\n", path)
 		return
 	}
 
-	if mh, ok := pluginInstance.(migrations.MigrationHook); ok {
-		migrations.RegisterHook(mh)
+	// If plugin implements hooks.Handler, register it to receive events.
+	if hh, ok := pluginInstance.(hooks.Handler); ok {
+		hooks.Register(hh)
 	}
 
 	pluginInstance.RegisterCommands(rootCmd)
