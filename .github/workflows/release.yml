@@ -19,23 +19,23 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23.1"
 
       - name: Build binaries for all targets
         run: |
           mkdir -p dist
 
-          echo "Building forge-linux-amd64..."
+          # Linux amd64
           GOOS=linux GOARCH=amd64 \
-            go build -o dist/forge-linux-amd64 ./cmd/main.go
-
-          echo "Building forge-darwin-amd64..."
+          go build -o dist/forge-linux-amd64 ./cmd/main.go
+          
+          # macOS Intel
           GOOS=darwin GOARCH=amd64 \
-            go build -o dist/forge-darwin-amd64 ./cmd/main.go
-
-          echo "Building forge-darwin-arm64..."
+          go build -o dist/forge-darwin-amd64 ./cmd/main.go
+          
+          # macOS ARM (M1/M2/M3)
           GOOS=darwin GOARCH=arm64 \
-            go build -o dist/forge-darwin-arm64 ./cmd/main.go
+          go build -o dist/forge-darwin-arm64 ./cmd/main.go
 
       - name: Show built files
         run: ls -l dist

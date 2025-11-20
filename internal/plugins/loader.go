@@ -1,9 +1,11 @@
 package plugins
 
 import (
+	"encoding/json"
 	"fmt"
 	"forge/internal/hooks"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"plugin"
 	"reflect"
@@ -27,7 +29,14 @@ func LoadPlugins(rootCmd *cobra.Command) {
 		}
 		seenRoots[root] = struct{}{}
 
-		loadPluginsFromRoot(rootCmd, root)
+		// На Linux используем пакет plugin (.so). На macOS и прочих — процессный режим.
+		if runtime.GOOS == "linux" {
+			loadPluginsFromRoot(rootCmd, root)
+		} else if runtime.GOOS == "darwin" {
+			loadPluginsFromRoot(rootCmd, root)
+		} else {
+			loadProcessPluginsFromRoot(rootCmd, root)
+		}
 	}
 }
 
@@ -82,6 +91,90 @@ func loadPluginsFromRoot(rootCmd *cobra.Command, root string) {
 	}
 }
 
+func loadProcessPluginsFromRoot(rootCmd *cobra.Command, root string) {
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return
+	}
+
+	err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			fmt.Printf("error scanning plugin dir %s: %v\n", path, walkErr)
+			return nil
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		// Ignore .so files (they're for native plugin.Open and not supported on macOS).
+		if filepath.Ext(d.Name()) == ".so" {
+			return nil
+		}
+
+		// Only consider executable files
+		fi, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if fi.Mode()&0111 == 0 {
+			return nil
+		}
+
+		if !isPluginForCurrentPlatform(d.Name()) {
+			return nil
+		}
+
+		loadProcessPlugin(rootCmd, path)
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("error walking plugin root %s: %v\n", root, err)
+	}
+}
+
+func loadProcessPlugin(rootCmd *cobra.Command, path string) {
+	cmd := exec.Command(path, "--describe")
+	out, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("unable to describe plugin %s: %v\n", path, err)
+		return
+	}
+
+	var desc struct {
+		Name     string `json:"name"`
+		Commands []struct {
+			Use   string `json:"use"`
+			Short string `json:"short"`
+		} `json:"commands"`
+	}
+
+	if err := json.Unmarshal(out, &desc); err != nil {
+		fmt.Printf("invalid plugin description from %s: %v\n", path, err)
+		return
+	}
+
+	for _, c := range desc.Commands {
+		sub := &cobra.Command{
+			Use:   c.Use,
+			Short: c.Short,
+			RunE: func(p string) func(cmd *cobra.Command, args []string) error {
+				return func(cmd *cobra.Command, args []string) error {
+					// Запускаем плагин процессом, прокидываем аргументы
+					execArgs := append([]string{p}, args...)
+					execCmd := exec.Command(path, execArgs...)
+					execCmd.Stdin = os.Stdin
+					execCmd.Stdout = os.Stdout
+					execCmd.Stderr = os.Stderr
+					return execCmd.Run()
+				}
+			}(c.Use),
+		}
+		rootCmd.AddCommand(sub)
+	}
+}
+
 func isPluginForCurrentPlatform(filename string) bool {
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
 	parts := strings.Split(name, "_")
@@ -120,10 +213,6 @@ func loadSinglePlugin(rootCmd *cobra.Command, path string) {
 
 	var pluginInstance Plugin
 
-	// Try several possible shapes of the exported symbol:
-	// 1) the symbol itself implements the Plugin interface
-	// 2) the symbol is a pointer to an interface variable (*Plugin)
-	// 3) the symbol is a pointer to the variable holding the concrete plugin
 	if pi, ok := sym.(Plugin); ok {
 		pluginInstance = pi
 	} else if pptr, ok := sym.(*Plugin); ok && pptr != nil {
