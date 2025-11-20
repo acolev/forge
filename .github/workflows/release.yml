@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-linux:
+    name: Build (linux)
     runs-on: ubuntu-latest
 
     steps:
@@ -21,24 +22,70 @@ jobs:
         with:
           go-version: "1.23.1"
 
-      - name: Build binaries for all targets
+      - name: Build linux binary
         run: |
           mkdir -p dist
 
           echo "Building forge-linux-amd64..."
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
             go build -o dist/forge-linux-amd64 ./cmd/main.go
+
+      - name: Upload linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  build-darwin:
+    name: Build (darwin)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.1"
+
+      - name: Build darwin binaries
+        run: |
+          mkdir -p dist
+
+          echo "Detected runner: $(uname -s)/$(uname -m)"
 
           echo "Building forge-darwin-amd64..."
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 \
             go build -o dist/forge-darwin-amd64 ./cmd/main.go
 
           echo "Building forge-darwin-arm64..."
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 \
             go build -o dist/forge-darwin-arm64 ./cmd/main.go
 
+      - name: Upload darwin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-darwin]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
       - name: Show built files
-        run: ls -l dist
+        run: ls -l dist || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
