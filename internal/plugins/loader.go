@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"forge/internal/hooks"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"plugin"
 	"reflect"
@@ -29,14 +28,7 @@ func LoadPlugins(rootCmd *cobra.Command) {
 		}
 		seenRoots[root] = struct{}{}
 
-		// На Linux используем пакет plugin (.so). На macOS и прочих — процессный режим.
-		if runtime.GOOS == "linux" {
-			loadPluginsFromRoot(rootCmd, root)
-		} else if runtime.GOOS == "darwin" {
-			loadPluginsFromRoot(rootCmd, root)
-		} else {
-			loadProcessPluginsFromRoot(rootCmd, root)
-		}
+		loadPluginsFromRoot(rootCmd, root)
 	}
 }
 
@@ -91,90 +83,6 @@ func loadPluginsFromRoot(rootCmd *cobra.Command, root string) {
 	}
 }
 
-func loadProcessPluginsFromRoot(rootCmd *cobra.Command, root string) {
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		return
-	}
-
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			fmt.Printf("error scanning plugin dir %s: %v\n", path, walkErr)
-			return nil
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		// Ignore .so files (they're for native plugin.Open and not supported on macOS).
-		if filepath.Ext(d.Name()) == ".so" {
-			return nil
-		}
-
-		// Only consider executable files
-		fi, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		if fi.Mode()&0111 == 0 {
-			return nil
-		}
-
-		if !isPluginForCurrentPlatform(d.Name()) {
-			return nil
-		}
-
-		loadProcessPlugin(rootCmd, path)
-		return nil
-	})
-
-	if err != nil {
-		fmt.Printf("error walking plugin root %s: %v\n", root, err)
-	}
-}
-
-func loadProcessPlugin(rootCmd *cobra.Command, path string) {
-	cmd := exec.Command(path, "--describe")
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Printf("unable to describe plugin %s: %v\n", path, err)
-		return
-	}
-
-	var desc struct {
-		Name     string `json:"name"`
-		Commands []struct {
-			Use   string `json:"use"`
-			Short string `json:"short"`
-		} `json:"commands"`
-	}
-
-	if err := json.Unmarshal(out, &desc); err != nil {
-		fmt.Printf("invalid plugin description from %s: %v\n", path, err)
-		return
-	}
-
-	for _, c := range desc.Commands {
-		sub := &cobra.Command{
-			Use:   c.Use,
-			Short: c.Short,
-			RunE: func(p string) func(cmd *cobra.Command, args []string) error {
-				return func(cmd *cobra.Command, args []string) error {
-					// Запускаем плагин процессом, прокидываем аргументы
-					execArgs := append([]string{p}, args...)
-					execCmd := exec.Command(path, execArgs...)
-					execCmd.Stdin = os.Stdin
-					execCmd.Stdout = os.Stdout
-					execCmd.Stderr = os.Stderr
-					return execCmd.Run()
-				}
-			}(c.Use),
-		}
-		rootCmd.AddCommand(sub)
-	}
-}
-
 func isPluginForCurrentPlatform(filename string) bool {
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
 	parts := strings.Split(name, "_")
@@ -207,43 +115,163 @@ func loadSinglePlugin(rootCmd *cobra.Command, path string) {
 
 	sym, err := p.Lookup("Plugin")
 	if err != nil {
-		fmt.Printf("unable to find Plugin symbol in %s: %v\n", path, err)
-		return
-	}
-
-	var pluginInstance Plugin
-
-	if pi, ok := sym.(Plugin); ok {
-		pluginInstance = pi
-	} else if pptr, ok := sym.(*Plugin); ok && pptr != nil {
-		// symbol is pointer to an interface variable
-		pluginInstance = *pptr
+		// not fatal yet — попробуем альтернативные экспортированные символы ниже
 	} else {
-		// Use reflection to handle cases like: var Plugin = &ExamplePlugin{}
-		v := reflect.ValueOf(sym)
-		if v.Kind() == reflect.Ptr && v.Elem().IsValid() {
-			val := v.Elem()
-			// If the element implements Plugin, use it
-			pluginIFace := reflect.TypeOf((*Plugin)(nil)).Elem()
-			if val.Type().Implements(pluginIFace) {
-				pluginInstance = val.Interface().(Plugin)
-			} else if val.Kind() == reflect.Ptr && val.Elem().Type().Implements(pluginIFace) {
-				// double pointer cases
-				pluginInstance = val.Elem().Interface().(Plugin)
+		// existing Plugin symbol handling
+		var pluginInstance Plugin
+		if pi, ok := sym.(Plugin); ok {
+			pluginInstance = pi
+		} else if pptr, ok := sym.(*Plugin); ok && pptr != nil {
+			pluginInstance = *pptr
+		} else {
+			v := reflect.ValueOf(sym)
+			if v.Kind() == reflect.Ptr && v.Elem().IsValid() {
+				val := v.Elem()
+				pluginIFace := reflect.TypeOf((*Plugin)(nil)).Elem()
+				if val.Type().Implements(pluginIFace) {
+					pluginInstance = val.Interface().(Plugin)
+				} else if val.Kind() == reflect.Ptr && val.Elem().Type().Implements(pluginIFace) {
+					pluginInstance = val.Elem().Interface().(Plugin)
+				}
 			}
+		}
+
+		if pluginInstance != nil {
+			if hh, ok := pluginInstance.(hooks.Handler); ok {
+				hooks.Register(hh)
+			}
+
+			pluginInstance.RegisterCommands(rootCmd)
+			return
 		}
 	}
 
-	if pluginInstance == nil {
+	// Если не получилось получить Plugin интерфейс — пробуем функцию Describe + Execute
+	descSym, derr := p.Lookup("Describe")
+	if derr != nil {
+		// нет Describe — ничего больше не делаем
 		fmt.Printf("invalid Plugin type in %s\n", path)
 		return
 	}
 
-	// If plugin implements hooks.Handler, register it to receive events.
-	if hh, ok := pluginInstance.(hooks.Handler); ok {
-		hooks.Register(hh)
+	// Получаем JSON-описание команд из Describe (поддерживаем func() (string|[]byte) или переменную)
+	var descBytes []byte
+	dv := reflect.ValueOf(descSym)
+	if dv.Kind() == reflect.Func {
+		outs := dv.Call(nil)
+		if len(outs) > 0 {
+			r := outs[0]
+			switch r.Kind() {
+			case reflect.String:
+				descBytes = []byte(r.String())
+			case reflect.Slice:
+				if r.Type().Elem().Kind() == reflect.Uint8 {
+					descBytes = r.Bytes()
+				}
+			}
+		}
+	} else {
+		// переменная Describe
+		rv := dv
+		if rv.Kind() == reflect.Ptr {
+			rv = rv.Elem()
+		}
+		if rv.Kind() == reflect.String {
+			descBytes = []byte(rv.String())
+		} else if rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() == reflect.Uint8 {
+			descBytes = rv.Bytes()
+		}
 	}
 
-	pluginInstance.RegisterCommands(rootCmd)
-	// fmt.Printf("Loaded plugin: %s (%s)\n", pluginInstance.Name(), path)
+	if len(descBytes) == 0 {
+		fmt.Printf("invalid plugin description from %s: empty\n", path)
+		return
+	}
+
+	var desc struct {
+		Name     string `json:"name"`
+		Commands []struct {
+			Use   string `json:"use"`
+			Short string `json:"short"`
+		} `json:"commands"`
+	}
+	if err := json.Unmarshal(descBytes, &desc); err != nil {
+		fmt.Printf("invalid plugin description from %s: %v\n", path, err)
+		return
+	}
+
+	// Найдём функцию-исполнитель в плагине
+	var execSym interface{}
+	for _, n := range []string{"Execute", "RunCommand", "HandleCommand"} {
+		if s, e := p.Lookup(n); e == nil {
+			execSym = s
+			break
+		}
+	}
+	if execSym == nil {
+		fmt.Printf("plugin %s: no Execute/RunCommand/HandleCommand symbol\n", path)
+		return
+	}
+
+	execVal := reflect.ValueOf(execSym)
+	if execVal.Kind() != reflect.Func {
+		// может быть указатель на функцию
+		if execVal.Kind() == reflect.Ptr {
+			execVal = execVal.Elem()
+		}
+		if execVal.Kind() != reflect.Func {
+			fmt.Printf("plugin %s: execute symbol is not a function\n", path)
+			return
+		}
+	}
+
+	// helper: вызывает функцию-плагин с разными сигнатурами
+	runExec := func(cmdName string, args []string) error {
+		t := execVal.Type()
+		var in []reflect.Value
+		// поддерживаем сигнатуры: func(cmd string, args []string) (error|int), func(args []string) (error|int), func() (error|int)
+		if t.NumIn() == 2 && t.In(0).Kind() == reflect.String && t.In(1).Kind() == reflect.Slice && t.In(1).Elem().Kind() == reflect.String {
+			in = []reflect.Value{reflect.ValueOf(cmdName), reflect.ValueOf(args)}
+		} else if t.NumIn() == 1 && t.In(0).Kind() == reflect.Slice && t.In(0).Elem().Kind() == reflect.String {
+			in = []reflect.Value{reflect.ValueOf(args)}
+		} else if t.NumIn() == 0 {
+			in = nil
+		} else {
+			fmt.Printf("plugin %s: unsupported Execute signature\n", path)
+			return nil
+		}
+
+		outs := execVal.Call(in)
+		if len(outs) == 0 {
+			return nil
+		}
+		// первый возвращаемый параметр может быть error или int
+		r0 := outs[0]
+		if r0.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+			if !r0.IsNil() {
+				return r0.Interface().(error)
+			}
+			return nil
+		}
+		if r0.Kind() == reflect.Int {
+			if r0.Int() != 0 {
+				return fmt.Errorf("plugin exit code %d", r0.Int())
+			}
+			return nil
+		}
+		return nil
+	}
+
+	for _, c := range desc.Commands {
+		sub := &cobra.Command{
+			Use:   c.Use,
+			Short: c.Short,
+			RunE: func(p string) func(cmd *cobra.Command, args []string) error {
+				return func(cmd *cobra.Command, args []string) error {
+					return runExec(p, args)
+				}
+			}(c.Use),
+		}
+		rootCmd.AddCommand(sub)
+	}
 }
