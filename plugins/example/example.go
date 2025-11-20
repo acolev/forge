@@ -9,6 +9,11 @@ import (
 
 type ExamplePlugin struct{}
 
+type Event struct {
+	Name    string
+	Payload any
+}
+
 func (p *ExamplePlugin) Name() string {
 	return "Example Plugin"
 }
@@ -26,7 +31,8 @@ func (p *ExamplePlugin) RegisterCommands(rootCmd *cobra.Command) {
 
 // Handle implements hooks.Handler — плагин слушает события.
 func (p *ExamplePlugin) Handle(ctx context.Context, e hooks.Event) error {
-	fmt.Println("test: ", e.Name)
+	fmt.Println("Context: ", ctx)
+	fmt.Println("Event name: ", e.Name)
 	if e.Name == "db.migrate.before" {
 		fmt.Println("ExamplePlugin: db.migrate.before event received")
 		fmt.Println(e.Payload)
