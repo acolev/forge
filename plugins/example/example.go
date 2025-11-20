@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"forge/internal/hooks"
 	"github.com/spf13/cobra"
 )
 
@@ -30,11 +29,10 @@ func (p *ExamplePlugin) RegisterCommands(rootCmd *cobra.Command) {
 }
 
 // Handle implements hooks.Handler — плагин слушает события.
-func (p *ExamplePlugin) Handle(ctx context.Context, e hooks.Event) error {
-	fmt.Println(e)
-	if e.Name == "db.migrate.before" {
+func (p *ExamplePlugin) Handle(ctx context.Context, name string, payload *any) error {
+	fmt.Println(*payload)
+	if name == "db.migrate.before" {
 		fmt.Println("ExamplePlugin: db.migrate.before event received")
-		fmt.Println(e.Payload)
 	}
 	return nil
 }
