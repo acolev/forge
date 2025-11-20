@@ -20,7 +20,18 @@ func main() {
 
 	rootCmd := &cobra.Command{
 		Use:   "forge",
-		Short: "Forge CLI - Database Migrations Manager",
+		Short: "Forge CLI – Project & Dev Toolkit",
+		Long: `Forge is a modern CLI toolkit for developers.
+
+It provides:
+  • Project scaffolding (Go, Node, TS, templates)
+  • Database migrations (make, migrate, rollback)
+  • Git integration for new/existing projects
+  • Environment initialization and management
+  • Self-update system
+  • Plugin support
+
+Use "forge --help" to see available commands.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Specify a command. Use 'forge --help' for more information.")
 		},
