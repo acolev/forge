@@ -14,7 +14,7 @@ type Event struct {
 
 // Handler is implemented by plugins that want to handle events.
 type Handler interface {
-	Handle(Name string, Payload *any) error
+	Handle(ctx context.Context, Name string, Payload *any) error
 }
 
 var (
@@ -40,7 +40,7 @@ func Emit(ctx context.Context, e Event) error {
 	mu.RUnlock()
 
 	for _, h := range hs {
-		if err := h.Handle(e.Name, &e.Payload); err != nil {
+		if err := h.Handle(ctx, e.Name, &e.Payload); err != nil {
 			return err
 		}
 	}

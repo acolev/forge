@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"forge/internal/hooks"
 	"forge/internal/migrations"
 	"forge/internal/plugins"
 	"forge/internal/project"
 	"forge/internal/seeders"
 	"forge/internal/selfupdate"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 
@@ -94,8 +96,18 @@ Use "forge --help" to see available commands.`,
 	seeders.RegisterCommands(rootCmd)
 	project.RegisterCommands(rootCmd)
 
-	// Load plugins and register their commands
-	plugins.LoadPlugins(rootCmd)
+	projectDir, err := os.Getwd()
+	if err != nil {
+		log.Println("[forge] cannot determine project dir:", err)
+	} else {
+		pm, err := plugins.NewManager(projectDir)
+		if err != nil {
+			log.Println("[forge][plugins] load error:", err)
+		} else {
+			pm.RegisterCommands(rootCmd)
+			hooks.Register(plugins.NewHookHandler(pm))
+		}
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
