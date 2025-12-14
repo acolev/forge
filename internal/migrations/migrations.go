@@ -126,7 +126,7 @@ func RunMigrations(db *gorm.DB) error {
 
 func RollbackLastMigration(db *gorm.DB) error {
 	var lastBatch int
-	if err := db.Model(&Migration{}).Select("MAX(batch)").Scan(&lastBatch).Error; err != nil {
+	if err := db.Model(&Migration{}).Select("MAX(batch)").Order("-batch").Scan(&lastBatch).Error; err != nil {
 		return fmt.Errorf("failed to get last batch: %v", err)
 	}
 

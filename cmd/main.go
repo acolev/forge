@@ -23,7 +23,15 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "forge",
 		Short: "Forge CLI – Project & Dev Toolkit",
-		Long: `Forge is a modern CLI toolkit for developers.
+		Long: `
+ ███████╗ ██████╗ ██████╗  ██████╗ ███████╗
+ ██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝
+ █████╗  ██║   ██║██████╔╝██║  ███╗█████╗  
+ ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝  
+ ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗
+ ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+
+Forge is a modern CLI toolkit for developers.
 
 It provides:
   • Project scaffolding (Go, Node, TS, templates)

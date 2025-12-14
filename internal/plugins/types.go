@@ -2,16 +2,15 @@ package plugins
 
 import "path/filepath"
 
-// Описание plugin.json
 type PluginManifest struct {
 	Name        string                `json:"name"`
 	Vendor      string                `json:"vendor"`
-	Namespace   string                `json:"namespace"` // например "mycmg"
+	Namespace   string                `json:"namespace"`
 	Description string                `json:"description"`
-	Lang        string                `json:"lang"`     // node | binary | python | ...
-	Entry       string                `json:"entry"`    // index.mjs или имя бинарника
-	Commands    []PluginCommand       `json:"commands"` // команды forge <namespace> <name>
-	Hooks       map[string]HookConfig `json:"hooks"`    // "db.migrate.before": { "command": "run_auto" }
+	Lang        string                `json:"lang"`  // runtime: binary|node|php...
+	Entry       string                `json:"entry"` // файл/бинарь для запуска
+	Commands    []PluginCommand       `json:"commands"`
+	Hooks       map[string]HookConfig `json:"hooks"`
 }
 
 type PluginCommand struct {

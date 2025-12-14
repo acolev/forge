@@ -16,8 +16,6 @@ func NewLoader(projectDir string) *Loader {
 }
 
 // ScanPlugins ищет plugin.json в:
-// - <project>/.forge/plugins/**/plugin.json
-// - $HOME/.forge/plugins/**/plugin.json
 func (l *Loader) ScanPlugins() ([]Plugin, error) {
 	var plugins []Plugin
 

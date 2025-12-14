@@ -16,11 +16,7 @@ func buildExecCommand(p Plugin) (string, []string) {
 		return "node", []string{entryPath}
 	case "python":
 		return "python", []string{entryPath}
-	case "binary", "":
-		// по умолчанию считаем, что entry — бинарник
-		return entryPath, nil
 	default:
-		// можно расширить для других рантаймов
 		return entryPath, nil
 	}
 }
