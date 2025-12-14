@@ -126,7 +126,7 @@ func RunMigrations(db *gorm.DB) error {
 
 func RollbackLastMigration(db *gorm.DB) error {
 	var lastBatch int
-	if err := db.Model(&Migration{}).Select("MAX(batch)").Order("id DESC").Scan(&lastBatch).Error; err != nil {
+	if err := db.Model(&Migration{}).Select("MAX(batch)").Scan(&lastBatch).Error; err != nil {
 		return fmt.Errorf("failed to get last batch: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func RollbackLastMigration(db *gorm.DB) error {
 	//}
 
 	var migrations []Migration
-	if err := db.Where("batch = ?", lastBatch).Find(&migrations).Error; err != nil {
+	if err := db.Where("batch = ?", lastBatch).Order("id DESC").Find(&migrations).Error; err != nil {
 		return fmt.Errorf("failed to find migration records: %v", err)
 	}
 
