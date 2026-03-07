@@ -42,6 +42,8 @@ type YAMLSeed struct {
 	// fixture
 	Table       string           `yaml:"table,omitempty"`
 	Rows        []map[string]any `yaml:"rows,omitempty"`
+	Count       int              `yaml:"count,omitempty"`
+	Template    map[string]any   `yaml:"template,omitempty"`
 	OnConflict  string           `yaml:"on_conflict,omitempty"`  // "", "do_nothing", "update_all"
 	ConflictKey []string         `yaml:"conflict_key,omitempty"` // для update_all
 	ChunkSize   int              `yaml:"chunk_size,omitempty"`   // default 1000

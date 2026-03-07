@@ -261,7 +261,11 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 	if s.Table == "" {
 		return errors.New("fixture seed: table is required")
 	}
-	if len(s.Rows) == 0 {
+	rows, err := expandFixtureRows(s)
+	if err != nil {
+		return fmt.Errorf("expand fixture rows: %w", err)
+	}
+	if len(rows) == 0 {
 		return db.Create(&Seed{Name: s.Name, Batch: batch, RanAt: time.Now()}).Error
 	}
 
@@ -276,8 +280,8 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 	}
 
 	// 1) $ref (включая вложенные в where)
-	for i := range s.Rows {
-		if err := resolveRowRefs(tx, s.Rows[i]); err != nil {
+	for i := range rows {
+		if err := resolveRowRefs(tx, rows[i]); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("resolve $ref failed: %w", err)
 		}
@@ -292,8 +296,8 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 	if cost <= 0 {
 		cost = defaultBcryptCost
 	}
-	for i := range s.Rows {
-		if err := hashPasswordFieldsIfPresent(s.Rows[i], fields, cost); err != nil {
+	for i := range rows {
+		if err := hashPasswordFieldsIfPresent(rows[i], fields, cost); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("hash password failed: %w", err)
 		}
@@ -305,19 +309,19 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 		tx.Rollback()
 		return fmt.Errorf("detect column kinds failed: %w", err)
 	}
-	for i := range s.Rows {
-		normalizeRowJSONForTable(s.Rows[i], colKinds)
-		normalizeRowByteaForTable(s.Rows[i], colKinds)
+	for i := range rows {
+		normalizeRowJSONForTable(rows[i], colKinds)
+		normalizeRowByteaForTable(rows[i], colKinds)
 	}
 
 	// 4) вставка / апсерт (+ авто-индекс при update_all)
 	switch strings.ToLower(s.OnConflict) {
 	case "do_nothing":
-		for i := 0; i < len(s.Rows); i += chunk {
-			end := min(endIndex(i, chunk, len(s.Rows)), len(s.Rows))
+		for i := 0; i < len(rows); i += chunk {
+			end := min(endIndex(i, chunk, len(rows)), len(rows))
 			if err := tx.Table(s.Table).
 				Clauses(clause.OnConflict{DoNothing: true}).
-				Create(s.Rows[i:end]).Error; err != nil {
+				Create(rows[i:end]).Error; err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -338,10 +342,10 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 			cols = append(cols, clause.Column{Name: k})
 		}
 
-		for i := 0; i < len(s.Rows); i += chunk {
-			end := min(endIndex(i, chunk, len(s.Rows)), len(s.Rows))
+		for i := 0; i < len(rows); i += chunk {
+			end := min(endIndex(i, chunk, len(rows)), len(rows))
 			update := map[string]any{}
-			for k := range s.Rows[i] {
+			for k := range rows[i] {
 				if !strIn(s.ConflictKey, k) {
 					update[k] = clause.Expr{SQL: "EXCLUDED." + k}
 				}
@@ -351,15 +355,15 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 			}
 			if err := tx.Table(s.Table).
 				Clauses(clause.OnConflict{Columns: cols, DoUpdates: clause.Assignments(update)}).
-				Create(s.Rows[i:end]).Error; err != nil {
+				Create(rows[i:end]).Error; err != nil {
 				tx.Rollback()
 				return err
 			}
 		}
 	default:
-		for i := 0; i < len(s.Rows); i += chunk {
-			end := min(endIndex(i, chunk, len(s.Rows)), len(s.Rows))
-			if err := tx.Table(s.Table).Create(s.Rows[i:end]).Error; err != nil {
+		for i := 0; i < len(rows); i += chunk {
+			end := min(endIndex(i, chunk, len(rows)), len(rows))
+			if err := tx.Table(s.Table).Create(rows[i:end]).Error; err != nil {
 				tx.Rollback()
 				return err
 			}

@@ -171,6 +171,8 @@ Examples:
 - `forge db migrate`
 - `forge db rollback`
 - `forge db make:sql create_table_users`
+- `forge seed make users`
+- `forge seed up`
 - `forge project create`
 - `forge project git:add`
 - `forge upgrade`
@@ -367,6 +369,104 @@ Forge will:
   - Read the corresponding file.
   - Execute the `-- DOWN` section.
   - Remove migration records from the `migrations` table.
+
+---
+
+## Seeders
+
+Forge stores YAML seed files in `./database/seeds`.
+
+Available commands:
+
+```bash
+forge seed make users
+forge seed up
+forge seed run --only=users
+forge seed status
+forge seed reset
+```
+
+### Create a seed
+
+Create a fixture seed scaffold:
+
+```bash
+forge seed make users
+```
+
+Create other types:
+
+```bash
+forge seed make roles --type sql
+forge seed make bootstrap --type go
+```
+
+### Fixture seed format
+
+Fixture seeds support either explicit `rows` or generated rows via `count + template`.
+
+Example:
+
+```yaml
+name: users
+type: fixture
+table: users
+count: 10
+template:
+  name: "fake:full_name"
+  email: "fake:email"
+  phone: "fake:phone"
+  is_active: "fake:bool"
+```
+
+### Fake tokens
+
+Built-in fake tokens:
+
+- `fake:first_name`
+- `fake:last_name`
+- `fake:full_name`
+- `fake:email`
+- `fake:company`
+- `fake:phone`
+- `fake:sentence`
+- `fake:uuid`
+- `fake:bool`
+- `fake:int:min:max`
+
+Example:
+
+```yaml
+template:
+  age: "fake:int:18:65"
+  company: "fake:company"
+```
+
+### Apply seeders
+
+Apply all pending seeders:
+
+```bash
+forge seed up
+```
+
+Apply only selected seeders:
+
+```bash
+forge seed run --only=users,roles
+```
+
+Show executed seeders:
+
+```bash
+forge seed status
+```
+
+Reset only seeder execution state:
+
+```bash
+forge seed reset
+```
 
 > Only migrations that have a valid `-- DOWN` section can be rolled back.
 
