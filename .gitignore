@@ -6,3 +6,4 @@
 *.dll
 /dist/
 .forge
+/forge-project/

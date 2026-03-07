@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
+	"forge/internal/config"
 	"forge/internal/hooks"
 	"forge/internal/migrations"
 	"forge/internal/plugins"
 	"forge/internal/project"
 	"forge/internal/seeders"
 	"forge/internal/selfupdate"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -50,34 +50,26 @@ Use "forge --help" to see available commands.`,
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "init",
-		Short: "Create or add environment variables to .env file",
+		Short: "Create or update .env.forge with Forge settings",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			envFilePath := ".env"
-			dbSettings := []string{
-				"DB_DRIVER=sqlite",
-				"#DB_HOST=localhost",
-				"#DB_PORT=5432",
-				"#DB_USER=user",
-				"#DB_PASSWORD=password",
-				"#DB_NAME=database",
-				"PLUGINS_DIR=database/plugins",
-			}
+			envFilePath := config.DefaultEnvFile
+			dbSettings := config.DefaultEnvLines()
 
 			file, err := os.OpenFile(envFilePath, os.O_RDWR|os.O_CREATE, 0666)
 			if err != nil {
-				return fmt.Errorf("unable to open or create .env file: %v", err)
+				return fmt.Errorf("unable to open or create %s: %v", envFilePath, err)
 			}
 			defer file.Close()
 
-			content, err := ioutil.ReadAll(file)
+			content, err := os.ReadFile(envFilePath)
 			if err != nil {
-				return fmt.Errorf("unable to read .env file: %v", err)
+				return fmt.Errorf("unable to read %s: %v", envFilePath, err)
 			}
 
 			for _, setting := range dbSettings {
 				if !strings.Contains(string(content), setting) {
 					if _, err := file.WriteString(setting + "\n"); err != nil {
-						return fmt.Errorf("unable to write to .env file: %v", err)
+						return fmt.Errorf("unable to write to %s: %v", envFilePath, err)
 					}
 				}
 			}
@@ -88,11 +80,16 @@ Use "forge --help" to see available commands.`,
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "env",
-		Short: "Display the current framework environment",
+		Short: "Display Forge config environment",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			content, err := ioutil.ReadFile(".env")
+			settings, err := config.CurrentSettings()
 			if err != nil {
-				return fmt.Errorf("unable to read .env file: %v", err)
+				return err
+			}
+
+			content, err := os.ReadFile(settings.EnvFile)
+			if err != nil {
+				return fmt.Errorf("unable to read %s: %v", settings.EnvFile, err)
 			}
 			fmt.Println(string(content))
 			return nil

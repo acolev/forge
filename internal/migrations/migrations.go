@@ -38,6 +38,7 @@ func CreateMigration(tableName string) error {
 
 func RunMigrations(db *gorm.DB) error {
 	ctx := context.Background()
+	startedAt := time.Now()
 
 	files, err := ioutil.ReadDir(migrationPath)
 	if err != nil {
@@ -82,17 +83,21 @@ func RunMigrations(db *gorm.DB) error {
 		return migrationsToRun[i].Name() < migrationsToRun[j].Name()
 	})
 
-	for _, file := range migrationsToRun {
-		content, err := ioutil.ReadFile(filepath.Join(migrationPath, file.Name()))
-		if err != nil {
-			return fmt.Errorf("unable to read file: %s, error: %v", file.Name(), err)
-		}
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		for _, file := range migrationsToRun {
+			content, err := ioutil.ReadFile(filepath.Join(migrationPath, file.Name()))
+			if err != nil {
+				return fmt.Errorf("unable to read file: %s, error: %v", file.Name(), err)
+			}
 
-		sections := strings.Split(string(content), "-- DOWN")
-		if len(sections) > 0 {
+			sections := strings.Split(string(content), "-- DOWN")
+			if len(sections) == 0 {
+				return fmt.Errorf("invalid migration format: %s", file.Name())
+			}
+
 			upSection := strings.TrimPrefix(sections[0], "-- UP\n")
 			fmt.Printf("Applying migration: %s\n", file.Name())
-			if err := db.Exec(upSection).Error; err != nil {
+			if err := tx.Exec(upSection).Error; err != nil {
 				return fmt.Errorf("failed to execute migration: %s, error: %v", file.Name(), err)
 			}
 
@@ -100,10 +105,13 @@ func RunMigrations(db *gorm.DB) error {
 				FileName: file.Name(),
 				Batch:    lastBatch + 1,
 			}
-			if err := db.Create(&migration).Error; err != nil {
+			if err := tx.Create(&migration).Error; err != nil {
 				return fmt.Errorf("failed to record migration: %s, error: %v", file.Name(), err)
 			}
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	// Emit before-create event
@@ -115,7 +123,7 @@ func RunMigrations(db *gorm.DB) error {
 		"migrationsRun":  migrationsToRun,
 		"newBatchNumber": lastBatch + 1,
 		"appliedAt":      time.Now(),
-		"duration":       time.Since(time.Now()),
+		"duration":       time.Since(startedAt),
 		"error":          nil,
 	}}); err != nil {
 		return err
@@ -175,7 +183,7 @@ func createMigrationFile(path string, tableName string) error {
 	}
 	defer f.Close()
 
-	stubName := strings.Join(strings.Split(tableName, "_")[:len(strings.Split(tableName, "_"))-1], "_")
+	stubName, placeholderName := resolveStubAndPlaceholder(tableName)
 	tpl, err := getTemplate(stubName)
 	if err != nil {
 		tpl = "" +
@@ -183,16 +191,40 @@ func createMigrationFile(path string, tableName string) error {
 			"\n" +
 			"-- DOWN\n"
 	} else {
-		// Remove the prefix from the table name
-		prefix := stubName + "_"
-		tableNameWithoutPrefix := strings.TrimPrefix(tableName, prefix)
-		tpl = strings.Replace(tpl, "{table_name}", tableNameWithoutPrefix, -1)
+		tpl = strings.Replace(tpl, "{table_name}", placeholderName, -1)
 	}
 
 	if _, err := f.WriteString(tpl); err != nil {
 		return fmt.Errorf("unable to write to the file: %s, error: %v", path, err)
 	}
 	return nil
+}
+
+func resolveStubAndPlaceholder(name string) (string, string) {
+	parts := strings.Split(name, "_")
+	if len(parts) == 0 {
+		return "", name
+	}
+
+	for i := len(parts); i > 0; i-- {
+		candidate := strings.Join(parts[:i], "_")
+		if _, err := getTemplate(candidate); err == nil {
+			placeholder := strings.TrimPrefix(name, candidate+"_")
+			if placeholder == name {
+				placeholder = name
+			}
+			return candidate, placeholder
+		}
+	}
+
+	switch parts[0] {
+	case "create":
+		return "create_table", strings.TrimPrefix(name, "create_")
+	case "update":
+		return "update_table", strings.TrimPrefix(name, "update_")
+	}
+
+	return "", name
 }
 
 func ensureMigrationDirectory() error {

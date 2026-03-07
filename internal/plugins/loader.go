@@ -3,6 +3,7 @@ package plugins
 import (
 	"encoding/json"
 	"fmt"
+	"forge/internal/config"
 	"os"
 	"path/filepath"
 )
@@ -19,8 +20,11 @@ func NewLoader(projectDir string) *Loader {
 func (l *Loader) ScanPlugins() ([]Plugin, error) {
 	var plugins []Plugin
 
-	// локальные плагины
-	localRoot := filepath.Join(l.projectDir, ".forge", "plugins")
+	localRoot, err := config.ResolvePluginsDir(l.projectDir)
+	if err != nil {
+		return nil, err
+	}
+
 	_ = filepath.Walk(localRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
