@@ -19,8 +19,8 @@ It is built with Go and designed to be simple to integrate into your workflow, w
   - Built‑in stub support (e.g. `create_table`, `update_table`) with priority for user‑defined stubs in `database/stubs`.
 
 - **Environment management**
-  - Initialize `.env` with required variables (`forge init`).
-  - Show the effective environment (`forge env`).
+  - Initialize `.env.forge` with Forge-specific variables (`forge init`).
+  - Show the current Forge config file (`forge env`).
 
 - **Project scaffolding**
   - Interactive wizard to create a new project:
@@ -37,11 +37,15 @@ It is built with Go and designed to be simple to integrate into your workflow, w
     - Supports `--dir` and `--remote` flags.
   - Creates an initial commit if there are no commits yet.
 
-- **Self update**
-  - `forge self-update` downloads the latest release from GitHub and replaces the current binary (in‑place update).
+- **Upgrade**
+  - `forge upgrade` downloads the latest release from GitHub and replaces the current binary (in‑place update).
 
 - **Plugin support**
-  - Load and register custom plugins to extend functionality (existing plugin system from the original Forge).
+  - Load local project plugins from `.forge/plugins` and global plugins from `~/.forge/plugins`.
+  - Create plugin scaffolds with `forge plugins create <vendor>/<name>`.
+  - Build source-based Go plugins with `forge plugins build <vendor>/<name>`.
+  - Install a local plugin globally with `forge plugins install <vendor>/<name>`.
+  - Auto-build Go plugins declared with `"source": "src"` before execution.
 
 ---
 
@@ -122,12 +126,12 @@ mv forge /usr/local/bin/forge
 
 ## Updating Forge
 
-### 1. Using self‑update (recommended)
+### 1. Using upgrade (recommended)
 
 Once Forge is installed, you can upgrade to the latest release with:
 
 ```bash
-forge self-update
+forge upgrade
 ```
 
 This will:
@@ -139,7 +143,7 @@ This will:
 > If Forge is installed in a system directory (e.g. `/usr/local/bin`), you may need to run:
 >
 > ```bash
-> sudo forge self-update
+> sudo forge upgrade
 > ```
 
 ### 2. Updating manually
@@ -169,15 +173,18 @@ Examples:
 - `forge db make:sql create_table_users`
 - `forge project create`
 - `forge project git:add`
-- `forge self-update`
+- `forge upgrade`
+- `forge plugins create bookly/migrate`
+- `forge plugins build bookly/migrate`
+- `forge plugins install bookly/migrate`
 
 ---
 
 ## Environment management
 
-### Initialize `.env`
+### Initialize `.env.forge`
 
-Create or update the `.env` file for your project:
+Create or update the `.env.forge` file for Forge-specific settings:
 
 ```bash
 forge init
@@ -185,16 +192,117 @@ forge init
 
 Typical responsibilities:
 
-- Create `.env` if it does not exist.
-- Ensure required variables are present (e.g. database DSN, app environment, etc).
+- Create `.env.forge` if it does not exist.
+- Ensure Forge variables are present without colliding with application env.
+
+Example:
+
+```env
+FORGE_DB_DSN=sqlite://database/database.db
+FORGE_PLUGINS_DIR=.forge/plugins
+```
 
 ### Show environment
 
-Display the current environment (values loaded from `.env` and process env):
+Display the current Forge config file contents, or resolved defaults if the file does not exist:
 
 ```bash
 forge env
 ```
+
+---
+
+## Plugins
+
+Forge supports both local and global plugins:
+
+- Local plugins live in `.forge/plugins`
+- Global plugins live in `~/.forge/plugins`
+- Local is the default for `create` and `build`
+
+### Plugin scaffold
+
+Create a local Go plugin:
+
+```bash
+forge plugins create bookly/migrate
+```
+
+This creates:
+
+```text
+.forge/plugins/bookly/migrate/plugin.json
+.forge/plugins/bookly/migrate/src/go.mod
+.forge/plugins/bookly/migrate/src/main.go
+```
+
+### Build a plugin
+
+Build a local plugin:
+
+```bash
+forge plugins build bookly/migrate
+```
+
+Build a global plugin:
+
+```bash
+forge plugins build bookly/migrate --global
+```
+
+### Install globally
+
+Install a local plugin into the global plugin directory:
+
+```bash
+forge plugins install bookly/migrate
+```
+
+### Source-based Go plugins
+
+If a plugin manifest declares:
+
+```json
+{
+  "lang": "go",
+  "entry": "migrate",
+  "source": "src"
+}
+```
+
+Forge will build the platform-specific binary automatically before running the plugin.
+
+### Available hooks
+
+Current hooks exposed by Forge:
+
+- `db.migrate.before`
+- `db.migrate.after`
+- `project.create.before`
+- `project.create.after`
+
+Example hook scaffold:
+
+```bash
+forge plugins create bookly/migrate --hook db.migrate.before
+```
+
+This creates a plugin manifest with:
+
+```json
+{
+  "hooks": {
+    "db.migrate.before": {
+      "command": "db-migrate-before"
+    }
+  }
+}
+```
+
+Notes:
+
+- Hook payloads are not forwarded to plugins yet.
+- For Go plugins, Forge auto-builds the binary before executing the hook.
 
 ---
 
@@ -382,7 +490,7 @@ Flags:
   Plugin loading and registration.
 
 - `internal/selfupdate/`  
-  Self‑update logic (`self-update` command).
+  Upgrade logic (`upgrade` command).
 
 ---
 

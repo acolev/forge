@@ -31,7 +31,7 @@ func InitProject(lang, name, targetDir string, gitInit bool) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("unsupported lang: %s (expected: go, node, ts, vue, empty)", lang)
+		return fmt.Errorf("unsupported lang: %s (expected: go, node, ts, empty)", lang)
 	}
 
 	if gitInit {
@@ -77,7 +77,7 @@ func main() {
 	}
 
 	goModPath := filepath.Join(targetDir, "go.mod")
-	goModContent := fmt.Sprintf("module %s\n\ngo 1.22\n", name)
+	goModContent := fmt.Sprintf("module %s\n\ngo 1.26.0\n", name)
 	if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
 		return err
 	}

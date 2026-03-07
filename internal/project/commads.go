@@ -79,7 +79,7 @@ Examples:
 
 	newCmd.Flags().StringVar(&fromURL, "from", "", "Git template (URL or owner/repo)")
 	newCmd.Flags().StringVar(&provider, "provider", "github", "Template provider: github|gitlab|bitbucket")
-	newCmd.Flags().StringVar(&lang, "lang", "", "Project language: go, node, ts, vue, empty")
+	newCmd.Flags().StringVar(&lang, "lang", "", "Project language: go, node, ts, empty")
 	newCmd.Flags().StringVar(&name, "name", "", "Project name")
 	newCmd.Flags().StringVar(&dir, "dir", "", "Target directory (default: ./<name>)")
 	newCmd.Flags().BoolVar(&gitInit, "git-init", false, "Initialize git in created project")

@@ -36,6 +36,7 @@ func RegisterCommands(rootCmd *cobra.Command) {
 			return ApplyOnly(db, strings.Split(only, ","))
 		},
 	}
+	runCmd.Flags().StringVar(&only, "only", "", "Comma-separated seeder names to run")
 
 	statusCmd := &cobra.Command{
 		Use: "status", Short: "Show executed seeders",

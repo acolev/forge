@@ -73,7 +73,10 @@ Examples:
 		Use:   "rollback",
 		Short: "Rollback the last database migration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			db, _ := database.InitDB()
+			db, err := database.InitDB()
+			if err != nil {
+				return fmt.Errorf("failed to initialize database: %v", err)
+			}
 			return RollbackLastMigration(db)
 		},
 	}

@@ -7,7 +7,7 @@ Forge is a Go CLI for:
 - YAML/Go/SQL seeders
 - project scaffolding
 - git initialization helpers
-- self-update from GitHub releases
+- upgrade from GitHub releases
 - external plugin execution via `.forge/plugins/**/plugin.json`
 
 Entrypoint:
@@ -15,11 +15,10 @@ Entrypoint:
 
 Module:
 - `module forge`
-- Go version in `go.mod`: `1.23.1`
+- Go version in `go.mod`: `1.26.0`
 
 ## Repository Layout
 
-- `/Users/attar/GolandProjects/NinjaCode/forge/cmd/main.go`
 - `cmd/main.go`
   Main Cobra CLI, root commands, plugin manager bootstrap.
 - `internal/database/database.go`
@@ -37,14 +36,17 @@ Module:
 - `internal/hooks/hooks.go`
   In-process hook bus used by project/migration/plugin integration.
 - `forge-project/`
-  Example/test workspace used during local development. Contains `.env`, `database/`, and local `.forge/plugins`.
+  Example/test workspace used during local development. Contains `.env.forge`, `database/`, and local `.forge/plugins`.
 
 ## CLI Surface
 
 Root commands implemented in code:
 - `forge init`
 - `forge env`
-- `forge self-update`
+- `forge upgrade`
+- `forge plugins create`
+- `forge plugins build`
+- `forge plugins install`
 - `forge db make:sql`
 - `forge db migrate`
 - `forge db rollback`
@@ -79,10 +81,22 @@ Actual runtime behavior:
 - scan local: `<project>/.forge/plugins/**/plugin.json`
 - scan global: `~/.forge/plugins/**/plugin.json`
 - load manifest
+- auto-build Go plugins when `lang == "go"` and `source` is declared
 - execute entry as:
   - binary directly by default
   - `node <entry>` if `lang == "node"`
   - `python <entry>` if `lang == "python"`
+
+Management commands:
+- `forge plugins create <vendor>/<name>` creates a scaffold locally by default
+- `forge plugins build <vendor>/<name>` builds a local plugin, `--global` builds from the global catalog
+- `forge plugins install <vendor>/<name>` copies a local plugin to `~/.forge/plugins/<vendor>/<name>`
+
+Available hooks:
+- `db.migrate.before`
+- `db.migrate.after`
+- `project.create.before`
+- `project.create.after`
 
 Protocol:
 - stdin: JSON request
@@ -97,17 +111,13 @@ Local example plugin source:
 
 ## Database Behavior
 
-Environment is loaded from `.env` via `godotenv.Load()`.
+Environment is loaded from `.env.forge` first, then `.env`, then process env.
 
 Expected variables:
-- `DB_DRIVER`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
+- `FORGE_DB_DSN`
+- `FORGE_PLUGINS_DIR`
 
-SQLite path is hardcoded:
+Default SQLite path:
 - `database/database.db`
 
 Migration metadata table:
@@ -187,16 +197,12 @@ Files:
 ## Known Issues And Mismatches
 
 High priority:
-- `seed run` declares `only` variable but never registers a `--only` flag, so targeted seed execution is effectively unusable.
-- `db rollback` ignores `database.InitDB()` error and may pass a nil DB into rollback logic.
-- self-update aborts when asset selection falls back, because `selectAsset()` returns both an asset and an error and caller treats any error as fatal.
 - plugin docs/build pipeline are inconsistent with runtime: `Makefile` and `scripts/build-plugins.sh` assume Go `buildmode=plugin`, while runtime expects manifest-based external executables/scripts.
 
 Medium priority:
-- README claims `forge env` shows effective environment, but implementation only prints `.env`.
-- README and help mention `vue`, but scaffolding does not implement it.
+- `forge env` prints the chosen Forge env file contents, or resolved defaults when the file is absent.
 - hook payload is intentionally dropped before plugin execution, which makes event hooks much less useful than the API shape suggests.
-- self-update has no checksum/signature verification.
+- upgrade has no checksum/signature verification.
 
 Operational:
 - local `go test` currently depends on a consistent Go toolchain and build cache; if tests fail with `compile: version ... does not match go tool version ...`, fix the host Go installation before trusting test results.
@@ -221,5 +227,5 @@ If sandboxing blocks `go test`, rerun with permission to use the host Go build c
 - Do not rely on `Makefile` for plugin behavior without reconciling it with `internal/plugins`.
 - Preserve Cobra command names and current output format unless intentionally changing CLI contract.
 - When touching migrations or seeders, verify behavior on SQLite and consider PostgreSQL-specific code paths separately.
-- When touching self-update, treat release asset naming and replacement semantics as cross-platform concerns.
+- When touching upgrade logic, treat release asset naming and replacement semantics as cross-platform concerns.
 - Avoid reverting unrelated user changes. Current worktree may already contain edits outside your task.

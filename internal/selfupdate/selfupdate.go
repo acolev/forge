@@ -56,7 +56,7 @@ func RunSelfUpdate(currentVersion string) error {
 
 	assetURL, assetName, err := selectAsset(latest)
 	if err != nil {
-		return err
+		fmt.Printf("Warning: %v\n", err)
 	}
 
 	fmt.Printf("Selected asset: %s\n", assetName)
@@ -116,17 +116,11 @@ func selectAsset(rel *githubRelease) (downloadURL, name string, err error) {
 		}
 	}
 
-	// Fallback: return the first available asset
-	// You should adjust assetPattern to properly match your release files.
-	if len(rel.Assets) > 0 {
-		a := rel.Assets[0]
-		return a.BrowserDownloadURL, a.Name, fmt.Errorf(
-			"no matching asset for %s/%s, using fallback asset %s; update assetPattern if needed",
-			runtime.GOOS, runtime.GOARCH, a.Name,
-		)
-	}
-
-	return "", "", errors.New("no suitable asset found")
+	a := rel.Assets[0]
+	return a.BrowserDownloadURL, a.Name, fmt.Errorf(
+		"no matching asset for %s/%s, using fallback asset %s; update assetPattern if needed",
+		runtime.GOOS, runtime.GOARCH, a.Name,
+	)
 }
 
 // downloadToTemp downloads the asset binary to a temporary file.

@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Version = "2.0.9"
+const Version = "2.1.1"
 
 func main() {
 
@@ -38,7 +38,7 @@ It provides:
   • Database migrations (make, migrate, rollback)
   • Git integration for new/existing projects
   • Environment initialization and management
-  • Self-update system
+  • Upgrade system
   • Plugin support
 
 Use "forge --help" to see available commands.`,
@@ -55,16 +55,19 @@ Use "forge --help" to see available commands.`,
 			envFilePath := config.DefaultEnvFile
 			dbSettings := config.DefaultEnvLines()
 
-			file, err := os.OpenFile(envFilePath, os.O_RDWR|os.O_CREATE, 0666)
+			content, err := os.ReadFile(envFilePath)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("unable to read %s: %v", envFilePath, err)
+				}
+				content = nil
+			}
+
+			file, err := os.OpenFile(envFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 			if err != nil {
 				return fmt.Errorf("unable to open or create %s: %v", envFilePath, err)
 			}
 			defer file.Close()
-
-			content, err := os.ReadFile(envFilePath)
-			if err != nil {
-				return fmt.Errorf("unable to read %s: %v", envFilePath, err)
-			}
 
 			for _, setting := range dbSettings {
 				if !strings.Contains(string(content), setting) {
@@ -89,8 +92,15 @@ Use "forge --help" to see available commands.`,
 
 			content, err := os.ReadFile(settings.EnvFile)
 			if err != nil {
+				if os.IsNotExist(err) {
+					fmt.Printf("# %s\n", settings.EnvFile)
+					fmt.Printf("%s=%s\n", config.ForgeDBDSNKey, settings.DBDSN)
+					fmt.Printf("%s=%s\n", config.ForgePluginsDirKey, settings.PluginsDir)
+					return nil
+				}
 				return fmt.Errorf("unable to read %s: %v", settings.EnvFile, err)
 			}
+			fmt.Printf("# %s\n", settings.EnvFile)
 			fmt.Println(string(content))
 			return nil
 		},
@@ -104,14 +114,17 @@ Use "forge --help" to see available commands.`,
 	projectDir, err := os.Getwd()
 	if err != nil {
 		log.Println("[forge] cannot determine project dir:", err)
+		projectDir = "."
+	}
+
+	plugins.RegisterManagementCommands(rootCmd, projectDir)
+
+	pm, err := plugins.NewManager(projectDir)
+	if err != nil {
+		log.Println("[forge][plugins] load error:", err)
 	} else {
-		pm, err := plugins.NewManager(projectDir)
-		if err != nil {
-			log.Println("[forge][plugins] load error:", err)
-		} else {
-			pm.RegisterCommands(rootCmd)
-			hooks.Register(plugins.NewHookHandler(pm))
-		}
+		pm.RegisterCommands(rootCmd)
+		hooks.Register(plugins.NewHookHandler(pm))
 	}
 
 	if err := rootCmd.Execute(); err != nil {

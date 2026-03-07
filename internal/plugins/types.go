@@ -1,6 +1,9 @@
 package plugins
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"runtime"
+)
 
 type PluginManifest struct {
 	Name        string                `json:"name"`
@@ -9,6 +12,7 @@ type PluginManifest struct {
 	Description string                `json:"description"`
 	Lang        string                `json:"lang"`  // runtime: binary|node|php...
 	Entry       string                `json:"entry"` // файл/бинарь для запуска
+	Source      string                `json:"source,omitempty"`
 	Commands    []PluginCommand       `json:"commands"`
 	Hooks       map[string]HookConfig `json:"hooks"`
 }
@@ -29,7 +33,22 @@ type Plugin struct {
 }
 
 func (p Plugin) EntryPath() string {
+	if p.Manifest.Lang == "go" && p.Manifest.Source != "" {
+		return filepath.Join(p.BaseDir, compiledBinaryName(p.Manifest.Entry))
+	}
 	return filepath.Join(p.BaseDir, p.Manifest.Entry)
+}
+
+func (p Plugin) SourcePath() string {
+	return filepath.Join(p.BaseDir, p.Manifest.Source)
+}
+
+func compiledBinaryName(entry string) string {
+	name := entry + "-" + runtime.GOOS + "-" + runtime.GOARCH
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return name
 }
 
 // ----------------- Протокол forge <-> плагин -------------------

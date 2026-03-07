@@ -35,7 +35,7 @@ func LoadEnv() error {
 	}
 
 	for key, value := range values {
-		if _, exists := os.LookupEnv(key); exists {
+		if current, exists := os.LookupEnv(key); exists && strings.TrimSpace(current) != "" {
 			continue
 		}
 		if err := os.Setenv(key, value); err != nil {

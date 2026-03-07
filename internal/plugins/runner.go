@@ -22,6 +22,10 @@ func buildExecCommand(p Plugin) (string, []string) {
 }
 
 func RunPlugin(p Plugin, req PluginRequest) (*PluginResponse, error) {
+	if err := EnsurePluginExecutable(p); err != nil {
+		return nil, err
+	}
+
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
