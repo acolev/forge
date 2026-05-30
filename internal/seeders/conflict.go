@@ -26,36 +26,58 @@ func ensureUniqueForConflict(tx *gorm.DB, table string, cols []string) error {
 		base = prefix + "_" + sum[:16]
 	}
 
-	// Собираем SQL: CREATE UNIQUE INDEX IF NOT EXISTS "name" ON "table" ("col",...)
-	var b strings.Builder
-	b.WriteString("CREATE UNIQUE INDEX IF NOT EXISTS ")
-	b.WriteString(`"` + base + `" ON "` + table + `"` + " (")
+	q := identQuoter(tx.Dialector.Name())
+	var cb strings.Builder
 	for i, c := range cols {
 		if i > 0 {
-			b.WriteString(", ")
+			cb.WriteString(", ")
 		}
-		b.WriteString(`"` + c + `"`)
+		cb.WriteString(q(c))
 	}
-	b.WriteString(")")
-	sql := b.String()
+	colList := cb.String()
 
-	// 1) Пытаемся с IF NOT EXISTS (PG ≥ 9.5)
-	if err := tx.Exec(sql).Error; err == nil {
-		return nil
-	} else {
-		// Если синтаксис не поддерживается (42601) — пробуем без IF NOT EXISTS и игнорируем дубликат имени.
-		plain := strings.Replace(sql, " IF NOT EXISTS", "", 1)
-		if err2 := tx.Exec(plain).Error; err2 != nil {
-			// Если индекс уже есть (дубликат объекта) — просто игнорируем.
-			// Коды возможных «дубликат» ошибок:
-			// 42710 duplicate_object, 42P07 duplicate_table (для индексов тоже встречается)
-			if isPgCode(err2, "42710") || isPgCode(err2, "42P07") {
+	switch tx.Dialector.Name() {
+	case "mysql":
+		// MySQL не поддерживает CREATE INDEX IF NOT EXISTS — создаём и глотаем дубликат (1061).
+		sql := fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s (%s)", q(base), q(table), colList)
+		if err := tx.Exec(sql).Error; err != nil {
+			if isMySQLDuplicateIndex(err) {
 				return nil
 			}
-			return fmt.Errorf("create unique index failed: %w", err2)
+			return fmt.Errorf("create unique index failed: %w", err)
+		}
+		return nil
+	default:
+		// postgres / sqlite поддерживают IF NOT EXISTS.
+		sql := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (%s)", q(base), q(table), colList)
+		if err := tx.Exec(sql).Error; err == nil {
+			return nil
+		}
+		// Фолбэк без IF NOT EXISTS — игнорируем дубликат объекта.
+		plain := fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s (%s)", q(base), q(table), colList)
+		if err := tx.Exec(plain).Error; err != nil {
+			// 42710 duplicate_object, 42P07 duplicate_table
+			if isPgCode(err, "42710") || isPgCode(err, "42P07") {
+				return nil
+			}
+			return fmt.Errorf("create unique index failed: %w", err)
 		}
 		return nil
 	}
+}
+
+// identQuoter возвращает функцию экранирования идентификаторов под диалект.
+func identQuoter(dialect string) func(string) string {
+	if dialect == "mysql" {
+		return func(s string) string { return "`" + strings.ReplaceAll(s, "`", "``") + "`" }
+	}
+	return func(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+}
+
+// isMySQLDuplicateIndex распознаёт MySQL error 1061 (Duplicate key name).
+func isMySQLDuplicateIndex(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "1061") || strings.Contains(msg, "duplicate key name")
 }
 
 // Выдёргиваем SQLSTATE из ошибок GORM/pgx, чтобы сравнить код.

@@ -168,10 +168,17 @@ forge <group> <command> [flags]
 
 Examples:
 
-- `forge db migrate`
-- `forge db rollback`
+- `forge db migrate` (`--dry-run` to preview SQL)
+- `forge db status`
+- `forge db rollback` (`--step N` to roll back N batches)
+- `forge db reset` / `forge db refresh` / `forge db fresh` (`--force` to skip confirmation)
 - `forge db make:sql create_table_users`
+- `forge db exec "SELECT * FROM users"` (`--file`, `--format json|csv`, or `-` for stdin)
+- `forge db schema:show`
+- `forge db schema:dump -o schema.sql`
+- `forge db schema:erd -o erd.mmd` (`--format dot` for Graphviz)
 - `forge seed make users`
+- `forge seed make --from-table users` (generate a fixture from an existing table's schema)
 - `forge seed up`
 - `forge project create`
 - `forge project git:add`
@@ -182,11 +189,63 @@ Examples:
 
 ---
 
+## Schema introspection & diagrams
+
+Forge can read the live database schema (sqlite / postgres / mysql) and render it
+several ways. Forge's own bookkeeping tables (`migrations`, `seeds`) are hidden by
+default — pass `--all` to include them.
+
+```bash
+forge db schema:show              # human-readable overview (tables, PK, FK, indexes)
+forge db schema:dump -o db.sql    # SQL DDL dump
+forge db schema:erd               # Mermaid erDiagram (renders on GitHub)
+forge db schema:erd --format dot -o erd.dot   # Graphviz DOT
+forge db schema:snapshot          # save schema to database/schema.snapshot.json
+forge db schema:diff              # compare live DB against the snapshot
+forge db schema:diff --exit-code  # non-zero exit if drifted (CI guard)
+forge db make:model users -o models/user.go   # generate Go struct(s) from tables
+```
+
+`make:model` writes plain Go source into your project — Forge generates it, your
+app compiles it (just like `make:sql` emits `.sql`). It is never loaded by Forge.
+
+The Mermaid output can be pasted straight into a Markdown file:
+
+```mermaid
+erDiagram
+    posts }o--|| users : "user_id"
+```
+
+---
+
 ## Environment management
+
+### Interactive configuration
+
+Run the step-by-step wizard to set up `.env.forge` without hand-writing a DSN:
+
+```bash
+forge config
+```
+
+It asks for the driver and connection details (host/port have skippable
+defaults; the password is read with hidden input on a terminal), plus the
+plugins dir and the output dir/package for `make:model`. Existing values are
+pre-filled, only Forge's own keys are touched, and it can test the connection at
+the end. Build the DSN once, store it as `FORGE_DB_DSN`:
+
+```env
+FORGE_DB_DSN=postgres://bob:secret@localhost:5432/appdb
+FORGE_PLUGINS_DIR=.forge/plugins
+FORGE_MODELS_DIR=models
+FORGE_MODELS_PACKAGE=models
+```
+
+`forge config show` prints the resolved configuration.
 
 ### Initialize `.env.forge`
 
-Create or update the `.env.forge` file for Forge-specific settings:
+Quick, non-interactive default scaffold (for scripts/CI):
 
 ```bash
 forge init

@@ -13,6 +13,8 @@ import (
 func RegisterCommands(rootCmd *cobra.Command) {
 	var only string
 	var seedType string
+	var fromTable string
+	var count int
 
 	seedCmd := &cobra.Command{Use: "seed", Short: "Seeders"}
 
@@ -40,15 +42,22 @@ Fake tokens:
   - fake:bool
   - fake:int:min:max
 
+  fake:datetime
+  fake:date
+
 Example:
   forge seed make users
   forge seed make users --type fixture
   forge seed make roles --type sql
+  forge seed make --from-table users          # generate fixture from an existing table
+  forge seed make --from-table users --count 50
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var name string
 			if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
 				name = strings.TrimSpace(args[0])
+			} else if fromTable != "" {
+				name = fromTable
 			} else {
 				reader := bufio.NewReader(os.Stdin)
 				fmt.Print("Enter seed name: ")
@@ -62,6 +71,24 @@ Example:
 				}
 			}
 
+			// Schema-derived fixture from an existing table.
+			if fromTable != "" {
+				db, err := database.InitDB()
+				if err != nil {
+					return fmt.Errorf("failed to initialize database: %v", err)
+				}
+				content, err := BuildFixtureFromTable(db, fromTable, count)
+				if err != nil {
+					return err
+				}
+				path, err := writeSeed(name, content)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("Created %s (from table %q)\n", path, fromTable)
+				return nil
+			}
+
 			path, err := CreateSeed(name, seedType)
 			if err != nil {
 				return err
@@ -71,6 +98,8 @@ Example:
 		},
 	}
 	makeCmd.Flags().StringVar(&seedType, "type", "fixture", "Seed type: fixture, sql, go")
+	makeCmd.Flags().StringVar(&fromTable, "from-table", "", "Generate a fixture from an existing table's schema")
+	makeCmd.Flags().IntVar(&count, "count", 10, "Number of rows to generate (with --from-table)")
 
 	upCmd := &cobra.Command{
 		Use: "up", Short: "Run all pending seeders",

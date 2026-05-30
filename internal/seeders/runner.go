@@ -303,15 +303,10 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 		}
 	}
 
-	// 3) нормализация под типы колонок
-	colKinds, err := pgColumnKinds(tx, s.Table)
-	if err != nil {
+	// 3) нормализация под драйвер/типы колонок
+	if err := normalizeRows(tx, s.Table, rows); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("detect column kinds failed: %w", err)
-	}
-	for i := range rows {
-		normalizeRowJSONForTable(rows[i], colKinds)
-		normalizeRowByteaForTable(rows[i], colKinds)
+		return fmt.Errorf("normalize rows failed: %w", err)
 	}
 
 	// 4) вставка / апсерт (+ авто-индекс при update_all)
@@ -342,19 +337,30 @@ func runFixture(db *gorm.DB, s YAMLSeed, batch int) error {
 			cols = append(cols, clause.Column{Name: k})
 		}
 
-		for i := 0; i < len(rows); i += chunk {
-			end := min(endIndex(i, chunk, len(rows)), len(rows))
-			update := map[string]any{}
-			for k := range rows[i] {
-				if !strIn(s.ConflictKey, k) {
-					update[k] = clause.Expr{SQL: "EXCLUDED." + k}
+		// Колонки для обновления = все, кроме ключей конфликта (объединение по всем строкам).
+		seenUpdate := map[string]bool{}
+		var updateCols []string
+		for _, r := range rows {
+			for k := range r {
+				if !strIn(s.ConflictKey, k) && !seenUpdate[k] {
+					seenUpdate[k] = true
+					updateCols = append(updateCols, k)
 				}
 			}
-			if len(update) == 0 {
-				update["updated_at"] = clause.Expr{SQL: "NOW()"}
-			}
+		}
+
+		// AssignmentColumns генерит SQL под диалект (EXCLUDED.* на pg/sqlite, VALUES()/alias на mysql).
+		onConflict := clause.OnConflict{Columns: cols}
+		if len(updateCols) > 0 {
+			onConflict.DoUpdates = clause.AssignmentColumns(updateCols)
+		} else {
+			onConflict.DoNothing = true
+		}
+
+		for i := 0; i < len(rows); i += chunk {
+			end := min(endIndex(i, chunk, len(rows)), len(rows))
 			if err := tx.Table(s.Table).
-				Clauses(clause.OnConflict{Columns: cols, DoUpdates: clause.Assignments(update)}).
+				Clauses(onConflict).
 				Create(rows[i:end]).Error; err != nil {
 				tx.Rollback()
 				return err

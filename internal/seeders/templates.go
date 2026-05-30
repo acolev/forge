@@ -9,17 +9,20 @@ import (
 )
 
 func CreateSeed(name, kind string) (string, error) {
-	if err := ensureSeedsDirectory(); err != nil {
-		return "", err
-	}
-
-	filename := fmt.Sprintf("%d_%s.yaml", time.Now().Unix(), strings.TrimSpace(name))
-	path := filepath.Join(seedsDir, filename)
-
 	content, err := seedTemplate(kind, name)
 	if err != nil {
 		return "", err
 	}
+	return writeSeed(name, content)
+}
+
+// writeSeed writes seed YAML content to a timestamped file in the seeds dir.
+func writeSeed(name, content string) (string, error) {
+	if err := ensureSeedsDirectory(); err != nil {
+		return "", err
+	}
+	filename := fmt.Sprintf("%d_%s.yaml", time.Now().Unix(), strings.TrimSpace(name))
+	path := filepath.Join(seedsDir, filename)
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return "", fmt.Errorf("write seed file %s: %w", path, err)
 	}

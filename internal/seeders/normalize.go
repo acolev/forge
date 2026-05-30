@@ -11,6 +11,45 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// normalizeRows приводит значения строк к виду, который понимает текущий драйвер.
+// На Postgres используются явные касты (::json/::jsonb) и обработка bytea через
+// интроспекцию information_schema. На sqlite/mysql information_schema-схемы нет
+// (а на sqlite её нет вовсе), поэтому там мы лишь гарантируем, что map/slice
+// сериализуются в JSON-текст — иначе драйвер не сможет забиндить значение.
+func normalizeRows(tx *gorm.DB, table string, rows []map[string]any) error {
+	switch tx.Dialector.Name() {
+	case "postgres":
+		kinds, err := pgColumnKinds(tx, table)
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			normalizeRowJSONForTable(rows[i], kinds)
+			normalizeRowByteaForTable(rows[i], kinds)
+		}
+	default:
+		for i := range rows {
+			jsonifyContainers(rows[i])
+		}
+	}
+	return nil
+}
+
+// jsonifyContainers превращает map/slice в JSON-строку (для sqlite/mysql).
+func jsonifyContainers(row map[string]any) {
+	for k, v := range row {
+		if _, isExpr := v.(clause.Expr); isExpr {
+			continue
+		}
+		switch v.(type) {
+		case map[string]any, []any:
+			if b, err := json.Marshal(v); err == nil {
+				row[k] = string(b)
+			}
+		}
+	}
+}
+
 // типы колонок (json/jsonb/bytea)
 func pgColumnKinds(tx *gorm.DB, table string) (map[string]string, error) {
 	type rec struct{ Col, Kind string }

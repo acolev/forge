@@ -67,16 +67,18 @@ DROP TABLE IF EXISTS {table_name};
 `,
 
 	"add_index": `-- UP
--- CREATE INDEX CONCURRENTLY idx_{table_name}_col ON {table_name} (col);
+-- NOTE: migrations run inside a transaction. Postgres CREATE INDEX CONCURRENTLY
+-- cannot run in a transaction — use a plain index here, or apply CONCURRENTLY manually.
+-- CREATE INDEX idx_{table_name}_col ON {table_name} (col);
 
 -- DOWN
--- DROP INDEX CONCURRENTLY IF EXISTS idx_{table_name}_col;
+-- DROP INDEX IF EXISTS idx_{table_name}_col;
 `,
 
 	"drop_index": `-- UP
--- DROP INDEX CONCURRENTLY IF EXISTS idx_{table_name}_col;
+-- DROP INDEX IF EXISTS idx_{table_name}_col;
 
 -- DOWN
--- CREATE INDEX CONCURRENTLY idx_{table_name}_col ON {table_name} (col);
+-- CREATE INDEX idx_{table_name}_col ON {table_name} (col);
 `,
 }
