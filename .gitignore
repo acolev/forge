@@ -1,7 +1,10 @@
 /database/
 .env
 .idea/
+/forge
 /forge.exe
+/main
+.DS_Store
 *.so
 *.dll
 /dist/

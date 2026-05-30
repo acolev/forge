@@ -56,7 +56,7 @@ func RunSelfUpdate(currentVersion string) error {
 
 	assetURL, assetName, err := selectAsset(latest)
 	if err != nil {
-		fmt.Printf("Warning: %v\n", err)
+		return fmt.Errorf("failed to select release asset: %w", err)
 	}
 
 	fmt.Printf("Selected asset: %s\n", assetName)
@@ -171,5 +171,47 @@ func replaceCurrentBinary(newBinaryPath string) error {
 
 	fmt.Printf("Replacing %s with %s\n", exePath, newBinaryPath)
 
-	return os.Rename(newBinaryPath, exePath)
+	// Stage the new binary in the SAME directory as the target so the final
+	// rename is atomic and never crosses a filesystem boundary (EXDEV) — the
+	// downloaded file lives in $TMPDIR, which is often on a different device.
+	destDir := filepath.Dir(exePath)
+	staged, err := os.CreateTemp(destDir, ".forge-update-*")
+	if err != nil {
+		return fmt.Errorf("cannot create staging file in %s: %w", destDir, err)
+	}
+	stagedPath := staged.Name()
+	staged.Close()
+
+	if err := copyFileContents(newBinaryPath, stagedPath); err != nil {
+		os.Remove(stagedPath)
+		return fmt.Errorf("failed to stage new binary: %w", err)
+	}
+	if err := os.Chmod(stagedPath, 0o755); err != nil {
+		os.Remove(stagedPath)
+		return fmt.Errorf("failed to chmod staged binary: %w", err)
+	}
+	if err := os.Rename(stagedPath, exePath); err != nil {
+		os.Remove(stagedPath)
+		return fmt.Errorf("failed to replace current binary: %w", err)
+	}
+	return nil
+}
+
+// copyFileContents copies src into an already-existing dst file.
+func copyFileContents(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }

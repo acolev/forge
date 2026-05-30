@@ -168,9 +168,15 @@ forge <group> <command> [flags]
 
 Examples:
 
-- `forge db migrate`
-- `forge db rollback`
+- `forge db migrate` (`--dry-run` to preview SQL)
+- `forge db status`
+- `forge db rollback` (`--step N` to roll back N batches)
+- `forge db reset` / `forge db refresh` / `forge db fresh` (`--force` to skip confirmation)
 - `forge db make:sql create_table_users`
+- `forge db exec "SELECT * FROM users"` (`--file`, `--format json|csv`, or `-` for stdin)
+- `forge db schema:show`
+- `forge db schema:dump -o schema.sql`
+- `forge db schema:erd -o erd.mmd` (`--format dot` for Graphviz)
 - `forge seed make users`
 - `forge seed up`
 - `forge project create`
@@ -179,6 +185,28 @@ Examples:
 - `forge plugins create bookly/migrate`
 - `forge plugins build bookly/migrate`
 - `forge plugins install bookly/migrate`
+
+---
+
+## Schema introspection & diagrams
+
+Forge can read the live database schema (sqlite / postgres / mysql) and render it
+several ways. Forge's own bookkeeping tables (`migrations`, `seeds`) are hidden by
+default — pass `--all` to include them.
+
+```bash
+forge db schema:show              # human-readable overview (tables, PK, FK, indexes)
+forge db schema:dump -o db.sql    # SQL DDL dump
+forge db schema:erd               # Mermaid erDiagram (renders on GitHub)
+forge db schema:erd --format dot -o erd.dot   # Graphviz DOT
+```
+
+The Mermaid output can be pasted straight into a Markdown file:
+
+```mermaid
+erDiagram
+    posts }o--|| users : "user_id"
+```
 
 ---
 
