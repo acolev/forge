@@ -1,124 +1,66 @@
 # Forge CLI — Database & Project Toolkit
 
-Forge is a command‑line tool that helps you manage **database migrations**, **environment configuration**, and **project scaffolding** from a single, opinionated CLI.
+Forge is an opinionated command‑line toolkit for Go-era projects. From a single
+binary it manages **database migrations**, **YAML seeders**, **schema
+introspection / ERD / drift detection**, **Go model generation**, **project
+scaffolding**, and an **external plugin system** — across **sqlite, postgres and
+mysql**.
 
-It is built with Go and designed to be simple to integrate into your workflow, while staying powerful enough for real projects.
+- Built in Go, no runtime dependencies.
+- One DSN to configure (`FORGE_DB_DSN`); an interactive wizard builds it for you.
+- Raw‑SQL migrations with up/down and batches — no ORM lock‑in.
 
 ---
 
-## Features
+## Table of contents
 
-- **Database migrations**
-  - Apply pending migrations in order (`forge db migrate`).
-  - Roll back the last batch of migrations (`forge db rollback`).
-  - Track applied migrations in the database using a dedicated `migrations` table.
-  - Generate SQL migration files from stubs (`forge db make:sql <name>`).
-
-- **Migration templates**
-  - Generate `.sql` files from stub templates (e.g. `create_table_users`).
-  - Built‑in stub support (e.g. `create_table`, `update_table`) with priority for user‑defined stubs in `database/stubs`.
-
-- **Environment management**
-  - Initialize `.env.forge` with Forge-specific variables (`forge init`).
-  - Show the current Forge config file (`forge env`).
-
-- **Project scaffolding**
-  - Interactive wizard to create a new project:
-    - Go project skeleton (`--lang go`)
-    - Node.js project (`--lang node`)
-    - TypeScript project (`--lang ts`)
-    - Empty project (`--lang empty`)
-    - From Git repository template (`--from <url>`)
-  - Optional `--git-init` to initialize a git repo right after scaffolding.
-
-- **Git integration**
-  - Add git to an existing project and configure a remote:
-    - `forge project git:add`
-    - Supports `--dir` and `--remote` flags.
-  - Creates an initial commit if there are no commits yet.
-
-- **Upgrade**
-  - `forge upgrade` downloads the latest release from GitHub and replaces the current binary (in‑place update).
-
-- **Plugin support**
-  - Load local project plugins from `.forge/plugins` and global plugins from `~/.forge/plugins`.
-  - Create plugin scaffolds with `forge plugins create <vendor>/<name>`.
-  - Build source-based Go plugins with `forge plugins build <vendor>/<name>`.
-  - Install a local plugin globally with `forge plugins install <vendor>/<name>`.
-  - Auto-build Go plugins declared with `"source": "src"` before execution.
+- [Installation](#installation)
+- [Updating Forge](#updating-forge)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Command reference](#command-reference)
+- [Database](#database)
+  - [Migrations](#migrations)
+  - [Running raw SQL (`db exec`)](#running-raw-sql-db-exec)
+  - [Schema introspection & diagrams](#schema-introspection--diagrams)
+  - [Schema snapshot & drift detection](#schema-snapshot--drift-detection)
+  - [Generate Go models (`make:model`)](#generate-go-models-makemodel)
+- [Seeders](#seeders)
+- [Project scaffolding](#project-scaffolding)
+- [Git integration](#git-integration-for-existing-projects)
+- [Plugins](#plugins)
+- [Directory structure](#directory-structure)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
 ## Installation
 
-You can install Forge either **from a GitHub release (recommended)** or **from source**.
+Install Forge **from a GitHub release (recommended)** or **from source**.
 
-### 1. Install from GitHub Releases
+### 1. From GitHub Releases
 
-Go to your repository releases page:
-
-- `https://github.com/acolev/forge/releases/latest`
-
-Pick the binary for your OS/architecture. With the default release naming pattern:
-
-- `forge-darwin-arm64`   – macOS (Apple Silicon)
-- `forge-darwin-amd64`   – macOS (Intel)
-- `forge-linux-amd64`    – Linux x86_64
-
-#### macOS (Apple Silicon, arm64)
+Asset naming pattern: `forge-<os>-<arch>` — e.g. `forge-darwin-arm64`,
+`forge-darwin-amd64`, `forge-linux-amd64`.
 
 ```bash
-curl -L https://github.com/acolev/forge/releases/latest/download/forge-darwin-arm64   -o /usr/local/bin/forge
-
+# macOS (Apple Silicon)
+curl -L https://github.com/acolev/forge/releases/latest/download/forge-darwin-arm64 -o /usr/local/bin/forge
 chmod +x /usr/local/bin/forge
 forge --help
 ```
 
-#### macOS (Intel, amd64)
+Swap the asset name for your platform (`forge-darwin-amd64`, `forge-linux-amd64`).
+To avoid `sudo`, install into `~/bin` and add it to your `PATH`.
 
-```bash
-curl -L https://github.com/acolev/forge/releases/latest/download/forge-darwin-amd64   -o /usr/local/bin/forge
-
-chmod +x /usr/local/bin/forge
-forge --help
-```
-
-#### Linux (amd64)
-
-```bash
-curl -L https://github.com/acolev/forge/releases/latest/download/forge-linux-amd64   -o /usr/local/bin/forge
-
-chmod +x /usr/local/bin/forge
-forge --help
-```
-
-> If you prefer to avoid `sudo`/root, you can install Forge into a directory in your `$HOME`, such as `~/bin`, and add it to your `PATH`.
-
-Example:
-
-```bash
-mkdir -p ~/bin
-curl -L https://github.com/acolev/forge/releases/latest/download/forge-darwin-arm64   -o ~/bin/forge
-chmod +x ~/bin/forge
-
-echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-forge --help
-```
-
----
-
-### 2. Install from source
+### 2. From source
 
 ```bash
 git clone https://github.com/acolev/forge.git
 cd forge
-
 go mod tidy
-
 go build -o forge ./cmd/main.go
-# Move the binary to a directory in your PATH, for example:
 mv forge /usr/local/bin/forge
 ```
 
@@ -126,345 +68,316 @@ mv forge /usr/local/bin/forge
 
 ## Updating Forge
 
-### 1. Using upgrade (recommended)
-
-Once Forge is installed, you can upgrade to the latest release with:
-
 ```bash
-forge upgrade
+forge upgrade           # fetch the latest release and replace the binary in place
+sudo forge upgrade      # if Forge lives in a system dir like /usr/local/bin
 ```
 
-This will:
-
-1. Fetch the latest release from GitHub.
-2. Download the binary asset matching your OS/architecture (e.g. `forge-darwin-arm64`).
-3. Replace the current `forge` binary in place.
-
-> If Forge is installed in a system directory (e.g. `/usr/local/bin`), you may need to run:
->
-> ```bash
-> sudo forge upgrade
-> ```
-
-### 2. Updating manually
-
-You can also repeat the **install from GitHub Releases** steps with a newer version:
-
-- Download the new binary.
-- Replace your existing `forge` binary.
-- Make sure it is executable.
+`upgrade` downloads the release asset matching your OS/arch and atomically
+replaces the running binary (staged next to the target, so it works across
+filesystems).
 
 ---
 
-## Usage
-
-### Command structure
-
-General pattern:
+## Quick start
 
 ```bash
-forge <group> <command> [flags]
+# 1. Configure the database interactively (writes .env.forge)
+forge config
+
+# 2. Create and apply a migration
+forge db make:sql create_table_users
+#    edit database/migrations/<ts>_create_table_users.sql
+forge db migrate
+
+# 3. Generate a fixture seed straight from the table and apply it
+forge seed make --from-table users --count 20
+forge seed up
+
+# 4. Inspect the schema
+forge db schema:show
+forge db schema:erd -o docs/erd.mmd
+
+# 5. Generate Go structs for your app
+forge db make:model -o models/models.go
 ```
-
-Examples:
-
-- `forge db migrate` (`--dry-run` to preview SQL)
-- `forge db status`
-- `forge db rollback` (`--step N` to roll back N batches)
-- `forge db reset` / `forge db refresh` / `forge db fresh` (`--force` to skip confirmation)
-- `forge db make:sql create_table_users`
-- `forge db exec "SELECT * FROM users"` (`--file`, `--format json|csv`, or `-` for stdin)
-- `forge db schema:show`
-- `forge db schema:dump -o schema.sql`
-- `forge db schema:erd -o erd.mmd` (`--format dot` for Graphviz)
-- `forge seed make users`
-- `forge seed make --from-table users` (generate a fixture from an existing table's schema)
-- `forge seed up`
-- `forge project create`
-- `forge project git:add`
-- `forge upgrade`
-- `forge plugins create bookly/migrate`
-- `forge plugins build bookly/migrate`
-- `forge plugins install bookly/migrate`
 
 ---
 
-## Schema introspection & diagrams
+## Configuration
 
-Forge can read the live database schema (sqlite / postgres / mysql) and render it
-several ways. Forge's own bookkeeping tables (`migrations`, `seeds`) are hidden by
-default — pass `--all` to include them.
+Forge reads settings from `.env.forge` (falling back to `.env`). Values already
+present in the process environment win, so you can override per shell/CI.
 
-```bash
-forge db schema:show              # human-readable overview (tables, PK, FK, indexes)
-forge db schema:dump -o db.sql    # SQL DDL dump
-forge db schema:erd               # Mermaid erDiagram (renders on GitHub)
-forge db schema:erd --format dot -o erd.dot   # Graphviz DOT
-forge db schema:snapshot          # save schema to database/schema.snapshot.json
-forge db schema:diff              # compare live DB against the snapshot
-forge db schema:diff --exit-code  # non-zero exit if drifted (CI guard)
-forge db make:model users -o models/user.go   # generate Go struct(s) from tables
+| Variable                | Purpose                                  | Default                      |
+| ----------------------- | ---------------------------------------- | ---------------------------- |
+| `FORGE_DB_DSN`          | Database connection string               | `sqlite://database/database.db` |
+| `FORGE_PLUGINS_DIR`     | Local plugins directory                  | `.forge/plugins`             |
+| `FORGE_MODELS_DIR`      | Default output dir for `make:model`      | `models`                     |
+| `FORGE_MODELS_PACKAGE`  | Default Go package for `make:model`      | `models`                     |
+
+### DSN formats
+
+```env
+FORGE_DB_DSN=sqlite://database/database.db
+FORGE_DB_DSN=postgres://user:pass@localhost:5432/dbname
+FORGE_DB_DSN=mysql://user:pass@localhost:3306/dbname
 ```
 
-`make:model` writes plain Go source into your project — Forge generates it, your
-app compiles it (just like `make:sql` emits `.sql`). It is never loaded by Forge.
+### Interactive wizard — `forge config`
 
-The Mermaid output can be pasted straight into a Markdown file:
+The recommended way to set things up. It asks for the driver and connection
+details step by step (host/port have skippable defaults; the password is read
+with **hidden input** on a terminal), then the plugins dir and the model output
+dir/package. It **pre-fills** answers from any existing `.env.forge`, only
+rewrites Forge's own keys (your other variables and comments are preserved), and
+can **test the connection** at the end.
+
+```bash
+forge config          # run the wizard
+forge config show     # print the resolved configuration
+```
+
+### Non‑interactive defaults — `forge init` / `forge env`
+
+```bash
+forge init    # append default Forge variables to .env.forge (no prompts; good for CI)
+forge env     # print the raw .env.forge contents (or resolved defaults)
+```
+
+---
+
+## Command reference
+
+```
+forge config                 Interactive configuration wizard
+  config show                Show resolved configuration
+forge init                   Write default .env.forge (non-interactive)
+forge env                    Print current env file
+
+forge db make:sql [name]     Create a migration file (uses stub if prefix matches)
+forge db migrate             Apply pending migrations         [--dry-run]
+forge db status              Show applied / pending migrations
+forge db rollback            Roll back the last batch         [--step N]
+forge db reset               Roll back ALL migrations         [--force]
+forge db refresh             Reset, then re-apply all         [--force]
+forge db fresh               Drop ALL tables, then migrate    [--force]
+forge db exec [sql]          Run raw SQL  [--file f] [--format table|json|csv] [-]
+forge db schema:show         Human-readable schema overview   [--all]
+forge db schema:dump         SQL DDL dump                     [-o file] [--all]
+forge db schema:erd          ERD diagram   [--format mermaid|dot] [-o file] [--all]
+forge db schema:snapshot     Save schema to JSON snapshot     [-o file] [--all]
+forge db schema:diff         Diff live DB vs snapshot   [--from f] [--exit-code] [--all]
+forge db make:model [table]  Generate Go structs  [-o file] [-p package] [--all]
+
+forge seed make [name]       Create a seed file  [--type fixture|sql|go]
+                                                 [--from-table T] [--count N]
+forge seed up                Apply all pending seeders
+forge seed run --only=a,b    Apply selected seeders
+forge seed status            Show executed seeders
+forge seed reset             Clear seeder run state (keeps data)
+
+forge project create         Scaffold a new project (wizard or flags)
+forge project git:add        Add git + remote to an existing project
+
+forge plugins create v/n     Scaffold a plugin     [--hook <event>]
+forge plugins build v/n      Build a source plugin [--global]
+forge plugins install v/n    Install a local plugin globally
+
+forge upgrade                Update Forge to the latest release
+```
+
+---
+
+## Database
+
+Migrations live in `./database/migrations`; applied migrations are tracked in a
+`migrations` table (grouped into **batches**). Every migration file has an
+`-- UP` and a `-- DOWN` section:
+
+```sql
+-- UP
+CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);
+
+-- DOWN
+DROP TABLE users;
+```
+
+### Migrations
+
+#### Create
+
+```bash
+forge db make:sql create_table_users
+# -> database/migrations/1763632453_create_table_users.sql
+```
+
+If the name starts with a known stub prefix, Forge fills the file from a
+template. Built‑in stubs: `create_table`, `update_table`, `add_column`,
+`drop_column`, `create_pivot_table`, `add_index`, `drop_index`. User stubs in
+`database/stubs/<name>.stub.sql` take priority and may use the `{table_name}`
+placeholder.
+
+#### Apply, preview, status
+
+```bash
+forge db migrate              # apply all pending migrations (in one transaction)
+forge db migrate --dry-run    # print the SQL that would run, apply nothing
+forge db status               # table of applied / pending migrations
+```
+
+#### Roll back
+
+```bash
+forge db rollback             # roll back the most recent batch
+forge db rollback --step 3    # roll back the last 3 batches
+```
+
+#### Destructive resets (guarded — prompt unless `--force`)
+
+```bash
+forge db reset     # run DOWN for ALL migrations
+forge db refresh   # reset, then re-apply everything
+forge db fresh     # DROP ALL TABLES, then re-run every migration from scratch
+```
+
+> Only migrations with a valid `-- DOWN` section can be rolled back. `reset`,
+> `refresh` and `fresh` ask for confirmation; pass `--force` in scripts/CI.
+
+### Running raw SQL (`db exec`)
+
+Run ad‑hoc SQL against the configured database. `SELECT`‑style statements are
+rendered as a table (or JSON/CSV); other statements report affected rows.
+
+```bash
+forge db exec "SELECT * FROM users"
+forge db exec "INSERT INTO users (email) VALUES ('a@x.io')"
+forge db exec --file ./scripts/report.sql
+echo "SELECT count(*) FROM users" | forge db exec -      # read from stdin
+forge db exec --format json "SELECT * FROM users"        # json | csv | table
+```
+
+### Schema introspection & diagrams
+
+Forge reads the **live** database schema (sqlite / postgres / mysql) and renders
+it several ways. Forge's own bookkeeping tables (`migrations`, `seeds`) are
+hidden by default — pass `--all` to include them.
+
+```bash
+forge db schema:show                        # tables, columns, PK, FK, indexes
+forge db schema:dump -o db.sql              # SQL DDL dump
+forge db schema:erd                         # Mermaid erDiagram (renders on GitHub)
+forge db schema:erd --format dot -o erd.dot # Graphviz DOT
+```
+
+The Mermaid output drops straight into Markdown:
 
 ```mermaid
 erDiagram
     posts }o--|| users : "user_id"
 ```
 
----
+### Schema snapshot & drift detection
 
-## Environment management
-
-### Interactive configuration
-
-Run the step-by-step wizard to set up `.env.forge` without hand-writing a DSN:
+Save the current schema as a JSON snapshot, then compare the live database
+against it later. Useful for catching unexpected schema **drift** (e.g. a manual
+change in production, or migrations that produced something unexpected).
 
 ```bash
-forge config
+forge db schema:snapshot                 # writes database/schema.snapshot.json
+forge db schema:diff                     # human-readable diff vs the snapshot
+forge db schema:diff --from other.json   # compare against a specific snapshot
+forge db schema:diff --exit-code         # exit 1 if drifted (CI guard)
 ```
 
-It asks for the driver and connection details (host/port have skippable
-defaults; the password is read with hidden input on a terminal), plus the
-plugins dir and the output dir/package for `make:model`. Existing values are
-pre-filled, only Forge's own keys are touched, and it can test the connection at
-the end. Build the DSN once, store it as `FORGE_DB_DSN`:
-
-```env
-FORGE_DB_DSN=postgres://bob:secret@localhost:5432/appdb
-FORGE_PLUGINS_DIR=.forge/plugins
-FORGE_MODELS_DIR=models
-FORGE_MODELS_PACKAGE=models
-```
-
-`forge config show` prints the resolved configuration.
-
-### Initialize `.env.forge`
-
-Quick, non-interactive default scaffold (for scripts/CI):
-
-```bash
-forge init
-```
-
-Typical responsibilities:
-
-- Create `.env.forge` if it does not exist.
-- Ensure Forge variables are present without colliding with application env.
-
-Example:
-
-```env
-FORGE_DB_DSN=sqlite://database/database.db
-FORGE_PLUGINS_DIR=.forge/plugins
-```
-
-### Show environment
-
-Display the current Forge config file contents, or resolved defaults if the file does not exist:
-
-```bash
-forge env
-```
-
----
-
-## Plugins
-
-Forge supports both local and global plugins:
-
-- Local plugins live in `.forge/plugins`
-- Global plugins live in `~/.forge/plugins`
-- Local is the default for `create` and `build`
-
-### Plugin scaffold
-
-Create a local Go plugin:
-
-```bash
-forge plugins create bookly/migrate
-```
-
-This creates:
-
-```text
-.forge/plugins/bookly/migrate/plugin.json
-.forge/plugins/bookly/migrate/src/go.mod
-.forge/plugins/bookly/migrate/src/main.go
-```
-
-### Build a plugin
-
-Build a local plugin:
-
-```bash
-forge plugins build bookly/migrate
-```
-
-Build a global plugin:
-
-```bash
-forge plugins build bookly/migrate --global
-```
-
-### Install globally
-
-Install a local plugin into the global plugin directory:
-
-```bash
-forge plugins install bookly/migrate
-```
-
-### Source-based Go plugins
-
-If a plugin manifest declares:
-
-```json
-{
-  "lang": "go",
-  "entry": "migrate",
-  "source": "src"
-}
-```
-
-Forge will build the platform-specific binary automatically before running the plugin.
-
-### Available hooks
-
-Current hooks exposed by Forge:
-
-- `db.migrate.before`
-- `db.migrate.after`
-- `project.create.before`
-- `project.create.after`
-
-Example hook scaffold:
-
-```bash
-forge plugins create bookly/migrate --hook db.migrate.before
-```
-
-This creates a plugin manifest with:
-
-```json
-{
-  "hooks": {
-    "db.migrate.before": {
-      "command": "db-migrate-before"
-    }
-  }
-}
-```
-
-Notes:
-
-- Hook payloads are not forwarded to plugins yet.
-- For Go plugins, Forge auto-builds the binary before executing the hook.
-
----
-
-## Database migrations
-
-Forge manages migrations stored in `./database/migrations` and tracks them in a `migrations` database table.
-
-### 1. Generate a migration
-
-Create a new SQL migration file using a naming convention and optional stub:
-
-```bash
-forge db make:sql create_table_users
-```
-
-This will generate a file like:
-
-```text
-database/migrations/1763632453_create_table_users.sql
-```
-
-The file will have the following structure:
-
-```sql
--- UP
--- your SQL goes here
-
--- DOWN
--- your rollback SQL goes here
-```
-
-If a stub exists for the prefix (for example `create_table.stub.sql` in `database/stubs`), Forge will use it and replace placeholders like `{table_name}`.  
-User‑defined stubs in `database/stubs` have priority over built‑in ones.
-
-### 2. Apply migrations
-
-Run all pending migrations in ascending order:
+Typical CI guard (commit the snapshot to git):
 
 ```bash
 forge db migrate
+forge db schema:diff --exit-code   # fails the build if the live schema drifted
 ```
 
-Forge will:
+`schema:diff` currently **reports** changes (added/removed tables, added/removed/
+changed columns, index and foreign‑key changes). It does not yet generate
+migrations from the diff.
 
-- Read all `.sql` files from `database/migrations`.
-- Check which ones are not yet applied (via the `migrations` table).
-- Execute the `-- UP` section of each pending migration.
-- Store the migration file name and batch number in the `migrations` table.
+### Generate Go models (`make:model`)
 
-### 3. Rollback last batch
-
-Rollback the last batch of applied migrations:
+Generate Go structs (with gorm/json tags) from existing tables. The generated
+`.go` file is **plain source for your project** — Forge writes it, *your* app
+compiles it (exactly like `make:sql` emits `.sql`). It is never loaded by Forge.
 
 ```bash
-forge db rollback
+forge db make:model users                 # one table -> stdout
+forge db make:model users -o models/user.go
+forge db make:model -o models/models.go    # all tables (internal ones excluded)
+forge db make:model --package entities -o models/models.go
 ```
 
-Forge will:
+When `-o`/`--package` are omitted, Forge falls back to `FORGE_MODELS_DIR` /
+`FORGE_MODELS_PACKAGE` from your config. Example output:
 
-- Find the highest `batch` number in the `migrations` table.
-- For all migrations in that batch:
-  - Read the corresponding file.
-  - Execute the `-- DOWN` section.
-  - Remove migration records from the `migrations` table.
+```go
+package models
+
+import "time"
+
+type User struct {
+	ID        uint       `gorm:"column:id;primaryKey" json:"id"`
+	Email     string     `gorm:"column:email;not null" json:"email"`
+	IsActive  *bool      `gorm:"column:is_active" json:"is_active"`     // nullable -> pointer
+	CreatedAt *time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (User) TableName() string { return "users" }
+```
 
 ---
 
 ## Seeders
 
-Forge stores YAML seed files in `./database/seeds`.
-
-Available commands:
-
-```bash
-forge seed make users
-forge seed up
-forge seed run --only=users
-forge seed status
-forge seed reset
-```
-
-### Create a seed
-
-Create a fixture seed scaffold:
+YAML seed files live in `./database/seeds`. A seed has a `type`: `fixture`
+(declarative rows), `sql` (raw SQL), or `go` (a registered Go function). Applied
+seeders are tracked (in a `seeds` table) and grouped into batches, like
+migrations.
 
 ```bash
-forge seed make users
+forge seed make users                       # fixture scaffold
+forge seed make roles --type sql            # SQL seed
+forge seed make bootstrap --type go         # Go seed
+forge seed make --from-table users --count 20   # generate a fixture FROM a table
+forge seed up                               # apply all pending seeders
+forge seed run --only=users,roles           # apply selected seeders
+forge seed status                           # show executed seeders
+forge seed reset                            # clear run state (does NOT delete data)
 ```
 
-Create other types:
+### Generate a fixture from a table — `--from-table`
+
+Instead of hand‑writing columns, point Forge at an existing table. It reads the
+schema, maps each column to a sensible `fake:` token (by name and type), wires
+foreign keys to a `$ref` on the parent, and skips auto primary keys and
+`created_at/updated_at/deleted_at`:
 
 ```bash
-forge seed make roles --type sql
-forge seed make bootstrap --type go
+forge seed make --from-table users --count 20
 ```
 
-### Fixture seed format
+```yaml
+name: users
+type: fixture
+table: users
+count: 20
+template:
+  email: "fake:email"
+  full_name: "fake:full_name"
+  company_id: "ref:companies|id=1|id"   # FK -> companies.id
+  is_active: "fake:bool"
+```
 
-Fixture seeds support either explicit `rows` or generated rows via `count + template`.
+### Fixture format
 
-Example:
+Fixtures support explicit `rows` or generated rows via `count + template`:
 
 ```yaml
 name: users
@@ -474,214 +387,167 @@ count: 10
 template:
   name: "fake:full_name"
   email: "fake:email"
-  phone: "fake:phone"
-  is_active: "fake:bool"
+  age: "fake:int:18:65"
+# Optional upsert behavior:
+# on_conflict: update_all        # "", "do_nothing", or "update_all"
+# conflict_key: [email]          # required for update_all
+# password_fields: [password]    # bcrypt-hashed before insert
 ```
 
-### Fake tokens
+#### Fake tokens
 
-Built-in fake tokens:
+`fake:first_name`, `fake:last_name`, `fake:full_name`, `fake:email`,
+`fake:company`, `fake:phone`, `fake:sentence`, `fake:uuid`, `fake:bool`,
+`fake:datetime`, `fake:date`, `fake:int:min:max`.
 
-- `fake:first_name`
-- `fake:last_name`
-- `fake:full_name`
-- `fake:email`
-- `fake:company`
-- `fake:phone`
-- `fake:sentence`
-- `fake:uuid`
-- `fake:bool`
-- `fake:int:min:max`
+#### `$ref` — reference another table's row
 
-Example:
+Resolve a value (e.g. a foreign key) from an existing parent row:
 
 ```yaml
 template:
-  age: "fake:int:18:65"
-  company: "fake:company"
+  # shortcut form: ref:<table>|<col>=<value>|<select-column>
+  company_id: "ref:companies|name=Acme|id"
+  # object form (supports defaults / nested refs):
+  owner_id:
+    $ref:
+      table: users
+      where: { email: "admin@x.io" }
+      select: id
 ```
 
-### Apply seeders
-
-Apply all pending seeders:
-
-```bash
-forge seed up
-```
-
-Apply only selected seeders:
-
-```bash
-forge seed run --only=users,roles
-```
-
-Show executed seeders:
-
-```bash
-forge seed status
-```
-
-Reset only seeder execution state:
-
-```bash
-forge seed reset
-```
-
-> Only migrations that have a valid `-- DOWN` section can be rolled back.
+> Fixture seeding is cross‑driver: on sqlite/mysql, map/array values are stored
+> as JSON text and upserts use dialect‑appropriate SQL. JSON casts and `bytea`
+> handling are Postgres‑specific.
 
 ---
 
 ## Project scaffolding
 
-Forge can bootstrap new projects via `forge project create`.
-
-### Interactive wizard
+Bootstrap new projects with `forge project create` — interactively or via flags.
 
 ```bash
-forge project create
-```
-
-You will be guided through a wizard:
-
-1. **Choose project type**:
-   - Go project
-   - Node.js project
-   - TypeScript project
-   - Empty project
-   - From Git repository URL
-
-2. **Project name**:
-   - Default: derived from the Git URL or `forge-project`.
-
-3. **Target directory**:
-   - Default: `./<project-name>`.
-   - If you enter `.`, Forge will use the current directory (no need for it to be empty, but use with care).
-
-4. Optionally, if you created the project with `--git-init`, Forge will initialize a git repository inside the project.
-
-### Non‑interactive usage
-
-You can skip the wizard by passing flags:
-
-#### Go project
-
-```bash
-forge project create --lang go --name my-api --dir ./services/my-api --git-init
-```
-
-#### Node.js project (JavaScript)
-
-```bash
+forge project create                         # interactive wizard
+forge project create --lang go   --name my-api --dir ./services/my-api --git-init
 forge project create --lang node --name my-app
-```
-
-#### TypeScript project
-
-```bash
-forge project create --lang ts --name my-ts-app
-```
-
-#### Empty project
-
-```bash
+forge project create --lang ts   --name my-ts-app
 forge project create --lang empty --name sandbox
-```
-
-#### From Git template
-
-```bash
 forge project create --from https://github.com/user/template.git --name booking-api
 ```
 
-In template mode Forge will:
-
-- Clone the repository into a temporary directory.
-- Remove the `.git` folder from the template.
-- Copy files into your target directory.
-- Optionally initialize a new git repository (`--git-init`).
+In template mode (`--from`) Forge clones the repo into a temp dir, strips its
+`.git`, copies files into your target directory, and (with `--git-init`)
+initializes a fresh repository.
 
 ---
 
 ## Git integration for existing projects
 
-Command:
-
 ```bash
 forge project git:add
-```
-
-### Interactive mode
-
-Without flags, Forge will:
-
-1. Use the current directory as the project root.
-2. Initialize git if `.git` folder is missing.
-3. Run `git add .`.
-4. Create an initial commit if there are no commits yet.
-5. Ask for a remote URL and add it as `origin`.
-6. Ask if it should push the initial commit to `origin main`.
-
-### With flags
-
-```bash
 forge project git:add --dir ./services/api --remote git@github.com:you/api.git
 ```
 
-Flags:
+Without flags it uses the current directory, initializes git if needed, runs
+`git add .`, creates an initial commit if there are none, then asks for a remote
+URL (added as `origin`) and whether to push.
 
 - `--dir` — project directory (default: current directory).
-- `--remote` — remote URL for `origin`. If omitted, Forge will ask interactively.
+- `--remote` — remote URL for `origin` (asked interactively if omitted).
 
 ---
 
-## Directory structure (typical)
+## Plugins
 
-- `cmd/`  
-  Entry point for the CLI (main.go).
+Forge runs **external plugins** as subprocesses (polyglot: Go, Node, Python),
+discovered from a `plugin.json` manifest.
 
-- `internal/migrations/`  
-  Migration logic (create, run, rollback).
+- Local plugins: `.forge/plugins` (default for `create`/`build`).
+- Global plugins: `~/.forge/plugins`.
 
-- `internal/project/`  
-  Project scaffolding (`project create`, `project git:add`).
+```bash
+forge plugins create bookly/migrate              # scaffold a Go plugin
+forge plugins create bookly/migrate --hook db.migrate.before
+forge plugins build bookly/migrate               # build (add --global for ~/.forge)
+forge plugins install bookly/migrate             # install a local plugin globally
+```
 
-- `internal/plugins/`  
-  Plugin loading and registration.
+`plugins create` writes:
 
-- `internal/selfupdate/`  
-  Upgrade logic (`upgrade` command).
+```text
+.forge/plugins/bookly/migrate/plugin.json
+.forge/plugins/bookly/migrate/src/go.mod
+.forge/plugins/bookly/migrate/src/main.go
+```
+
+### Source‑based Go plugins
+
+A manifest declaring Go source is auto‑built (platform‑specific binary) before
+execution:
+
+```json
+{ "lang": "go", "entry": "migrate", "source": "src" }
+```
+
+### Hooks
+
+Plugins can subscribe to lifecycle events via their manifest:
+
+```json
+{ "hooks": { "db.migrate.before": { "command": "db-migrate-before" } } }
+```
+
+Available events: `db.migrate.before`, `db.migrate.after`,
+`project.create.before`, `project.create.after`.
+
+> Note: hook payloads are not forwarded to plugins yet.
+
+---
+
+## Directory structure
+
+A Forge‑managed project typically has:
+
+```text
+.env.forge                 # Forge configuration
+database/
+  migrations/              # .sql migrations (-- UP / -- DOWN)
+  seeds/                   # .yaml seeders
+  stubs/                   # optional user migration stubs
+  schema.snapshot.json     # optional schema snapshot (for schema:diff)
+.forge/plugins/            # local plugins
+```
+
+Forge's own source layout:
+
+- `cmd/main.go` — CLI entry point and root commands (`config`, `init`, `env`, `upgrade`).
+- `internal/config/` — settings, DSN build/parse, the interactive wizard.
+- `internal/database/` — GORM bootstrap and the `db exec` engine.
+- `internal/migrations/` — migration generate/apply/rollback and the `db` command group.
+- `internal/schema/` — schema introspection, dump/ERD, snapshot/diff, model generation.
+- `internal/seeders/` — YAML seeder engine (sql/fixture/go, fakers, `$ref`).
+- `internal/project/` — project scaffolding and git helpers.
+- `internal/plugins/` — plugin discovery and execution.
+- `internal/selfupdate/` — `upgrade` logic.
+- `internal/hooks/` — in‑process hook bus.
 
 ---
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a new branch:
+```bash
+git checkout -b feature/my-feature
+# ... changes ...
+go test ./...
+go build ./cmd/main.go
+git commit -am "Add my feature"
+git push origin feature/my-feature
+```
 
-   ```bash
-   git checkout -b feature/my-feature
-   ```
-
-3. Make your changes.
-4. Run tests / build:
-
-   ```bash
-   go test ./...
-   go build ./cmd/main.go
-   ```
-
-5. Commit and push:
-
-   ```bash
-   git commit -am "Add my feature"
-   git push origin feature/my-feature
-   ```
-
-6. Open a Pull Request.
+Then open a Pull Request.
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**.  
-See the `LICENSE` file for details.
+This project is licensed under the **MIT License**. See the `LICENSE` file for details.
