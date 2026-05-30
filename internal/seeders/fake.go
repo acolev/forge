@@ -113,6 +113,10 @@ func fakeValue(input string) (any, error) {
 		return pick(fakeSentences), nil
 	case token == "uuid":
 		return fakeUUID(), nil
+	case token == "datetime":
+		return fakeDateTime().Format("2006-01-02 15:04:05"), nil
+	case token == "date":
+		return fakeDateTime().Format("2006-01-02"), nil
 	case token == "bool":
 		return fakeRand.Intn(2) == 0, nil
 	case strings.HasPrefix(token, "int:"):
@@ -139,6 +143,13 @@ func fakeInt(token string) (int, error) {
 		return 0, fmt.Errorf("invalid fake int range %d..%d", min, max)
 	}
 	return min + fakeRand.Intn(max-min+1), nil
+}
+
+// fakeDateTime returns a random instant within roughly the past year.
+func fakeDateTime() time.Time {
+	days := fakeRand.Intn(365)
+	secs := fakeRand.Intn(86400)
+	return time.Now().AddDate(0, 0, -days).Add(-time.Duration(secs) * time.Second)
 }
 
 func fakeUUID() string {

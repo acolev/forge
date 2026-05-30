@@ -178,6 +178,7 @@ Examples:
 - `forge db schema:dump -o schema.sql`
 - `forge db schema:erd -o erd.mmd` (`--format dot` for Graphviz)
 - `forge seed make users`
+- `forge seed make --from-table users` (generate a fixture from an existing table's schema)
 - `forge seed up`
 - `forge project create`
 - `forge project git:add`
