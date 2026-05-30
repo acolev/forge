@@ -220,9 +220,32 @@ erDiagram
 
 ## Environment management
 
+### Interactive configuration
+
+Run the step-by-step wizard to set up `.env.forge` without hand-writing a DSN:
+
+```bash
+forge config
+```
+
+It asks for the driver and connection details (host/port have skippable
+defaults; the password is read with hidden input on a terminal), plus the
+plugins dir and the output dir/package for `make:model`. Existing values are
+pre-filled, only Forge's own keys are touched, and it can test the connection at
+the end. Build the DSN once, store it as `FORGE_DB_DSN`:
+
+```env
+FORGE_DB_DSN=postgres://bob:secret@localhost:5432/appdb
+FORGE_PLUGINS_DIR=.forge/plugins
+FORGE_MODELS_DIR=models
+FORGE_MODELS_PACKAGE=models
+```
+
+`forge config show` prints the resolved configuration.
+
 ### Initialize `.env.forge`
 
-Create or update the `.env.forge` file for Forge-specific settings:
+Quick, non-interactive default scaffold (for scripts/CI):
 
 ```bash
 forge init

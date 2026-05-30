@@ -10,18 +10,24 @@ import (
 )
 
 const (
-	DefaultEnvFile      = ".env.forge"
-	FallbackEnvFile     = ".env"
-	DefaultPluginsDir   = ".forge/plugins"
-	DefaultSQLiteDBPath = "database/database.db"
-	ForgeDBDSNKey       = "FORGE_DB_DSN"
-	ForgePluginsDirKey  = "FORGE_PLUGINS_DIR"
+	DefaultEnvFile        = ".env.forge"
+	FallbackEnvFile       = ".env"
+	DefaultPluginsDir     = ".forge/plugins"
+	DefaultSQLiteDBPath   = "database/database.db"
+	DefaultModelsDir      = "models"
+	DefaultModelsPackage  = "models"
+	ForgeDBDSNKey         = "FORGE_DB_DSN"
+	ForgePluginsDirKey    = "FORGE_PLUGINS_DIR"
+	ForgeModelsDirKey     = "FORGE_MODELS_DIR"
+	ForgeModelsPackageKey = "FORGE_MODELS_PACKAGE"
 )
 
 type Settings struct {
-	EnvFile    string
-	DBDSN      string
-	PluginsDir string
+	EnvFile       string
+	DBDSN         string
+	PluginsDir    string
+	ModelsDir     string
+	ModelsPackage string
 }
 
 func LoadEnv() error {
@@ -72,10 +78,22 @@ func CurrentSettings() (Settings, error) {
 		pluginsDir = DefaultPluginsDir
 	}
 
+	modelsDir := strings.TrimSpace(os.Getenv(ForgeModelsDirKey))
+	if modelsDir == "" {
+		modelsDir = DefaultModelsDir
+	}
+
+	modelsPackage := strings.TrimSpace(os.Getenv(ForgeModelsPackageKey))
+	if modelsPackage == "" {
+		modelsPackage = DefaultModelsPackage
+	}
+
 	return Settings{
-		EnvFile:    envFile,
-		DBDSN:      dsn,
-		PluginsDir: pluginsDir,
+		EnvFile:       envFile,
+		DBDSN:         dsn,
+		PluginsDir:    pluginsDir,
+		ModelsDir:     modelsDir,
+		ModelsPackage: modelsPackage,
 	}, nil
 }
 

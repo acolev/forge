@@ -20,13 +20,10 @@ type Migration struct {
 	Batch    int    `json:"batch"`
 }
 
-func InitDB() (*gorm.DB, error) {
-	settings, err := config.CurrentSettings()
-	if err != nil {
-		return nil, err
-	}
-
-	driver, dsn, err := parseForgeDBDSN(settings.DBDSN)
+// Connect opens a database connection from a Forge DSN without running any
+// migrations. Used by the config wizard to test connectivity.
+func Connect(forgeDSN string) (*gorm.DB, error) {
+	driver, dsn, err := parseForgeDBDSN(forgeDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -35,19 +32,32 @@ func InitDB() (*gorm.DB, error) {
 		Logger: logger.Default.LogMode(logger.Silent),
 	}
 
+	var db *gorm.DB
 	switch driver {
 	case "sqlite":
-		DB, err = gorm.Open(sqlite.Open(dsn), gormConfig)
+		db, err = gorm.Open(sqlite.Open(dsn), gormConfig)
 	case "mysql":
-		DB, err = gorm.Open(mysql.Open(dsn), gormConfig)
+		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	case "postgres":
-		DB, err = gorm.Open(postgres.Open(dsn), gormConfig)
+		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		return nil, fmt.Errorf("unsupported database driver %q", driver)
 	}
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %v", err)
+	}
+	return db, nil
+}
+
+func InitDB() (*gorm.DB, error) {
+	settings, err := config.CurrentSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	DB, err = Connect(settings.DBDSN)
+	if err != nil {
+		return nil, err
 	}
 
 	// AutoMigrate the Migration struct to create the migrations table if it doesn't exist

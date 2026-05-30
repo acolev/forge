@@ -3,8 +3,10 @@ package schema
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"forge/internal/config"
 	"forge/internal/database"
 
 	"github.com/spf13/cobra"
@@ -192,14 +194,26 @@ app compiles it. Pass a table name to generate a single model, or omit it for al
 			}
 
 			var tables []string
+			fileName := "models.go"
 			if len(args) > 0 && args[0] != "" {
 				// Explicit table — honor it even if it's an internal table.
 				tables = []string{args[0]}
+				fileName = args[0] + ".go"
 				if m.Table(args[0]) == nil {
 					return fmt.Errorf("table %q not found in current database", args[0])
 				}
 			} else {
 				m = applyVisibility(m, all)
+			}
+
+			// Defaults from .env.forge (FORGE_MODELS_DIR / FORGE_MODELS_PACKAGE).
+			if s, serr := config.CurrentSettings(); serr == nil {
+				if !cmd.Flags().Changed("package") && s.ModelsPackage != "" {
+					pkg = s.ModelsPackage
+				}
+				if out == "" && s.ModelsDir != "" {
+					out = filepath.Join(s.ModelsDir, fileName)
+				}
 			}
 
 			code := RenderGoModels(m, pkg, tables)
@@ -253,6 +267,11 @@ func writeOut(path, content string) error {
 			fmt.Println()
 		}
 		return nil
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create %s: %w", dir, err)
+		}
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", path, err)

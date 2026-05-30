@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"forge/internal/config"
+	"forge/internal/database"
 	"forge/internal/hooks"
 	"forge/internal/migrations"
 	"forge/internal/plugins"
@@ -105,6 +106,42 @@ Use "forge --help" to see available commands.`,
 			return nil
 		},
 	})
+
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "Interactive configuration wizard (.env.forge)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := config.RunWizard(os.Stdin, os.Stdout, func(dsn string) error {
+				db, err := database.Connect(dsn)
+				if err != nil {
+					return err
+				}
+				sqlDB, err := db.DB()
+				if err != nil {
+					return err
+				}
+				return sqlDB.Ping()
+			})
+			return err
+		},
+	}
+	configCmd.AddCommand(&cobra.Command{
+		Use:   "show",
+		Short: "Show the resolved Forge configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := config.CurrentSettings()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("# resolved from %s\n", s.EnvFile)
+			fmt.Printf("%s=%s\n", config.ForgeDBDSNKey, s.DBDSN)
+			fmt.Printf("%s=%s\n", config.ForgePluginsDirKey, s.PluginsDir)
+			fmt.Printf("%s=%s\n", config.ForgeModelsDirKey, s.ModelsDir)
+			fmt.Printf("%s=%s\n", config.ForgeModelsPackageKey, s.ModelsPackage)
+			return nil
+		},
+	})
+	rootCmd.AddCommand(configCmd)
 
 	selfupdate.Register(rootCmd, Version)
 	migrations.RegisterCommands(rootCmd)
