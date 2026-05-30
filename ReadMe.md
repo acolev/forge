@@ -200,7 +200,14 @@ forge db schema:show              # human-readable overview (tables, PK, FK, ind
 forge db schema:dump -o db.sql    # SQL DDL dump
 forge db schema:erd               # Mermaid erDiagram (renders on GitHub)
 forge db schema:erd --format dot -o erd.dot   # Graphviz DOT
+forge db schema:snapshot          # save schema to database/schema.snapshot.json
+forge db schema:diff              # compare live DB against the snapshot
+forge db schema:diff --exit-code  # non-zero exit if drifted (CI guard)
+forge db make:model users -o models/user.go   # generate Go struct(s) from tables
 ```
+
+`make:model` writes plain Go source into your project — Forge generates it, your
+app compiles it (just like `make:sql` emits `.sql`). It is never loaded by Forge.
 
 The Mermaid output can be pasted straight into a Markdown file:
 
